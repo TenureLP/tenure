@@ -60,6 +60,11 @@ step "API: openapi.json is not stale"
   && python3 make-openapi-json.py --check \
   || echo "   skipped, PyYAML not installed"); note $?
 
+step "App: abi.js is not stale"
+# The page calls the contract by selector. If this file and the compiled contract ever disagree,
+# every button on the page is calling something else.
+(cd app && python3 make-abi-js.py --check); note $?
+
 step "Landing: waitlist endpoint logic"
 python3 - <<'PY'
 import sys, os, json, tempfile

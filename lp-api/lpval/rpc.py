@@ -49,12 +49,26 @@ class Endpoint:
 
     __slots__ = ("url", "headers", "label")
 
+    # Plaintext is allowed to a node on this machine and nowhere else: there is no network for
+    # anyone to listen on. Matched on the host rather than on the prefix, because
+    # http://localhost.example.com starts with http://localhost and is somebody else’s server.
+    LOCAL_HOSTS = ("localhost", "127.0.0.1", "[::1]")
+
     def __init__(self, url, headers=None):
-        if not url.startswith("https://") and not url.startswith("http://localhost"):
-            raise ValueError("the RPC url must be https (or a localhost node)")
+        if not url.startswith("https://") and not self._is_local(url):
+            raise ValueError("the RPC url must be https (or a node on this machine)")
         self.url = url
         self.headers = dict(headers or {})
         self.label = url.split("://", 1)[1].split("/", 1)[0]  # host only, so no key
+
+    @classmethod
+    def _is_local(cls, url):
+        if not url.startswith("http://"):
+            return False
+        host = url[len("http://"):].split("/", 1)[0].split("?", 1)[0]
+        if "@" in host:  # user:password@elsewhere, which is not this machine
+            return False
+        return host in cls.LOCAL_HOSTS or host.rsplit(":", 1)[0] in cls.LOCAL_HOSTS
 
     def secrets(self):
         """The parts of this endpoint that must never appear in text we emit."""

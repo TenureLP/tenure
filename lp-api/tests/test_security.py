@@ -225,6 +225,21 @@ class RpcTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             Rpc("http://evil.example")
 
+    def test_plain_http_is_allowed_only_to_this_machine(self):
+        """A node on this machine has no network for anyone to listen on, which is the whole of
+        the exception.
+
+        The app runs against a forked chain on 127.0.0.1, so the exception has to cover the address
+        as well as the name. What it must not cover is a host that merely begins with one:
+        localhost.evil.example resolves wherever its owner says it does.
+        """
+        for url in ("http://localhost:8545", "http://127.0.0.1:8545", "http://[::1]:8545"):
+            self.assertEqual(Rpc(url).endpoints[0].url, url)
+        for url in ("http://localhost.evil.example", "http://127.0.0.1.evil.example",
+                    "http://user@evil.example", "ws://localhost:8545"):
+            with self.assertRaises(ValueError, msg=url):
+                Rpc(url)
+
     def test_reverted_is_not_the_same_as_unreachable(self):
         self.assertIsNot(REVERTED, None)
 

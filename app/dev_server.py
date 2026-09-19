@@ -18,8 +18,11 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         path = self.path.split("?", 1)[0]
+        # The page and the scripts beside it, nothing else: this process sits next to source, and
+        # the source next to it includes a deploy script and a broadcast log.
         allowed = (
-            path in ("/", "/index.html", "/app.js")
+            path in ("/", "/index.html")
+            or (path.endswith(".js") and "/" not in path[1:])
             or (path.startswith("/assets/") and ".." not in path)
         )
         return super().do_GET() if allowed else self.send_error(404)
