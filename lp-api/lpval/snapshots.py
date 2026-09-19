@@ -15,10 +15,14 @@ MIN_SPACING_SECONDS = 60
 
 def _conn():
     c = sqlite3.connect(_PATH, timeout=10)
+    c.execute("PRAGMA journal_mode=WAL")
+    c.execute("PRAGMA synchronous=NORMAL")
     c.execute(
         "CREATE TABLE IF NOT EXISTS snap (pool TEXT, tl INTEGER, tu INTEGER, ts INTEGER, fg0 TEXT, fg1 TEXT)"
     )
-    c.execute("CREATE INDEX IF NOT EXISTS snap_idx ON snap (pool, tl, tu, ts)")
+    # UNIQUE is what actually enforces the spacing: the SELECT-then-INSERT below is a race, and
+    # concurrent callers all read the same stale maximum and all insert.
+    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS snap_idx ON snap (pool, tl, tu, ts)")
     return c
 
 
@@ -29,7 +33,9 @@ def record(pool_id: str, tl: int, tu: int, fg0: int, fg1: int, now: int = None):
             "SELECT MAX(ts) FROM snap WHERE pool=? AND tl=? AND tu=?", (pool_id, tl, tu)
         ).fetchone()[0]
         if last is None or now - last >= MIN_SPACING_SECONDS:
-            c.execute("INSERT INTO snap VALUES (?,?,?,?,?,?)", (pool_id, tl, tu, now, str(fg0), str(fg1)))
+            c.execute(
+                "INSERT OR IGNORE INTO snap VALUES (?,?,?,?,?,?)", (pool_id, tl, tu, now, str(fg0), str(fg1))
+            )
 
 
 def oldest_within(pool_id: str, tl: int, tu: int, lookback_seconds: float, now: int = None):

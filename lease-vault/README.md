@@ -1,79 +1,112 @@
 # Lease Vault
 
-Vente et location de positions de liquidité Uniswap v4 sur Robinhood Chain. Un fournisseur de liquidité vend sa position à un financeur, la loue immédiatement contre un loyer fixe, garde les frais de swap pendant la durée du bail, et peut la racheter à un prix convenu d'avance. Rien n'est prêté, rien n'est liquidé.
+Sale-and-leaseback of Uniswap v4 liquidity positions on Robinhood Chain. A liquidity provider sells
+their position to a financier, leases it straight back for a fixed rent, keeps the swap fees for the
+length of the lease, and may buy it back at a price agreed upfront. Nothing is lent and nothing is
+liquidated.
 
-C'est l'implémentation du « modèle C » discuté autour de Gage : la même expérience produit, cash maintenant contre un actif productif, avec une structure juridique de vente et location avec promesse de rachat, au lieu d'un prêt gagé à surcoût fixe. L'analyse de conformité détaillée est dans la section 6 de la spec.
+The point is to keep the product experience of a collateralised loan, cash now against a productive
+asset, while the contract is a sale plus a lease plus a buyback promise rather than a pledged loan
+with a fixed surcharge. The compliance analysis is in section 6 of the spec.
 
-**Statut : prototype.** Le code compile avec solc 0.8.28. Les 29 tests unitaires passent contre des contrats simulés, et les 5 tests d'intégration passent en fork contre le vrai PositionManager Uniswap v4 de Robinhood Chain. Il n'a pas été audité et la structure n'a pas été revue par un comité de conformité. Ne pas déployer en l'état.
+**Status: prototype.** It builds with solc 0.8.28. 37 unit tests pass against mocks, including a
+stateful fuzz over random action sequences, and 5 integration tests pass forked against the real
+Uniswap v4 PositionManager on Robinhood Chain. It has not been audited and the structure has not been
+reviewed by a compliance committee. Do not deploy it as it stands.
 
-## Le point bloquant à connaître avant tout
+## The blocker to know before anything else
 
-Les Stock Tokens de Robinhood Chain ne sont pas des actions tokenisées. D'après la documentation officielle, ce sont des titres de dette tokenisés émis par Robinhood Assets (Jersey) Limited, sans droit de vote, sans droit sur l'action sous-jacente, et interdits aux personnes américaines. Conséquences :
+Robinhood Chain's Stock Tokens are not tokenised equities. Per the official documentation they are
+tokenised debt securities issued by Robinhood Assets (Jersey) Limited, with no voting rights, no
+claim on the underlying share, and barred from US persons. Two consequences:
 
-- **Côté SEC.** L'exemption d'innovation du 17 septembre 2026 ne couvre que les actions NMS tokenisées portant les mêmes droits qu'une action classique. Elle exclut explicitement les jetons synthétiques qui ne donnent qu'une exposition au prix. Les Stock Tokens actuels sont hors périmètre.
-- **Côté conformité.** Un titre de dette dont la valeur suit un cours d'action est une créance, pas une propriété. En faire du LP revient à faire du marché sur une créance, ce que l'analyse de la spec écarte.
+- **On the SEC side.** The innovation exemption covers only tokenised NMS stock carrying the same
+  rights as an ordinary share. It explicitly excludes synthetic tokens that give price exposure
+  alone. Today's Stock Tokens are out of scope.
+- **On the compliance side.** A debt security tracking a share price is a receivable, not ownership.
+  Making a market in one is what the analysis in the spec rules out.
 
-Les deux critères convergent. L'allowlist du protocole doit donc se limiter, pour la v1, aux paires crypto jugées licites (WETH/USDG par exemple) et, dès qu'elles apparaîtront sur la chaîne, aux actions tokenisées à droits complets qui satisfont la définition de la SEC. Le registre porte un champ `assetClass` et un `screeningRef` pour tracer cette décision paire par paire.
+Both criteria point the same way. For v1 the allowlist is limited to crypto pairs judged
+permissible, WETH/USDG for instance, and later to full-rights tokenised equities once they exist on
+the chain. The registry carries an `assetClass` and a `screeningRef` so that decision is recorded
+pair by pair.
 
-## Comment ça marche
+## How it works
 
-1. **Listing.** Le fournisseur de liquidité met en vente sa position NFT avec un prix, un loyer total pour la durée, un prix de rachat et une durée (7 ou 21 jours par exemple). Le NFT entre dans le vault.
-2. **Financement.** Un financeur paie le prix. Il devient propriétaire de la position. Le vendeur reçoit le prix moins le loyer prépayé et moins des frais fixes de protocole. Le loyer reste en escrow et s'écoule vers le financeur seconde par seconde.
-3. **Bail.** Le locataire collecte les frais de swap de la position autant qu'il veut. Il ne peut jamais retirer de liquidité. Si le jeton sous-jacent est gelé par l'émetteur, le loyer cesse de courir.
-4. **Échéance.** Le locataire rachète la position au prix convenu, à tout moment jusqu'à la fin de la période de grâce, et le loyer non couru lui est remboursé. Sinon, après la grâce, le financeur prend livraison de ce qui lui appartient déjà.
+1. **Listing.** The liquidity provider offers their position NFT with a price, a total rent for the
+   term, a buyback price and a duration. The NFT moves into the vault.
+2. **Funding.** A financier pays the price and becomes the owner of the position. The seller receives
+   the price less the prepaid rent and a flat protocol fee. The rent stays in escrow and streams to
+   the financier second by second.
+3. **The lease.** The lessee collects the position's swap fees as often as they like. They can never
+   withdraw liquidity. If the underlying token is frozen by its issuer, the rent stops accruing.
+4. **Maturity.** The lessee buys the position back at the agreed price, any time until the grace
+   window closes, and unaccrued rent is refunded to them. Otherwise, after the grace window, the
+   financier takes delivery of what already belongs to them.
 
-Tous les paiements sont des soldes à retirer, jamais des transferts forcés. Le vault n'a ni propriétaire ni mise à jour possible.
+Every payment is a balance to withdraw, never a forced transfer. The vault has no owner and no
+upgrade path.
 
-## Arborescence
+## Layout
 
 ```
-src/LeaseVault.sol          contrat principal, sans propriétaire
-src/AssetRegistry.sol       allowlist des pools, durées, grâce, frais fixes
-src/interfaces/             surfaces minimales de PositionManager, StateView, ERC-20
-src/libraries/Types.sol     types v4 recopiés, décodage PositionInfo, actions
-test/LeaseVault.t.sol       suite de tests unitaires
-test/fork/VaultFork.t.sol   tests d'intégration en fork de Robinhood Chain
-test/mocks/                 USDG, jeton pausable, PositionManager et StateView simulés
-script/Deploy.s.sol         déploiement sur Robinhood Chain
-docs/SPEC.md                spécification, analyse de conformité, cadre réglementaire
+src/LeaseVault.sol          the core contract, no owner
+src/AssetRegistry.sol       pool allowlist, terms, grace window, flat fee
+src/interfaces/             minimal surfaces of PositionManager, StateView, ERC-20
+src/libraries/Types.sol     v4 types copied over, PositionInfo decoding, actions
+test/LeaseVault.t.sol       unit tests
+test/Invariants.t.sol       stateful fuzz over random action sequences
+test/fork/VaultFork.t.sol   integration tests forked against Robinhood Chain
+test/mocks/                 USDG, a pausable token, a PositionManager and a StateView
+script/Deploy.s.sol         deployment to Robinhood Chain
+docs/SPEC.md                specification, compliance analysis, regulatory context
 ```
 
-## Lancer
+## Running it
 
-Le projet n'a aucune dépendance externe : les quelques cheatcodes Foundry utilisés sont déclarés dans `test/utils/MiniTest.sol`. Avec Foundry installé (sous WSL par exemple) :
+The project has no external dependency: the handful of Foundry cheatcodes used are declared in
+`test/utils/MiniTest.sol`. With Foundry installed, under WSL for instance:
 
 ```bash
 forge test --offline -vv
 ```
 
-Tests d'intégration en fork contre le vrai déploiement Uniswap v4. Le script choisit tout seul une position vivante, dans le range et à range large, grâce à `../lp-api`. Rien n'est envoyé sur la chaîne.
+Integration tests against the live Uniswap v4 deployment. The script picks a live, in-range,
+wide-range position on its own using `../lp-api`. Nothing is sent to the chain.
 
 ```bash
 ./fork-test.sh
 ```
 
-Déploiement :
+Before any deployment, confirm the hardcoded addresses are still what they claim:
+
+```bash
+./verify-addresses.sh
+```
+
+Deployment:
 
 ```bash
 REGISTRY_OWNER=0x... FEE_RECIPIENT=0x... forge script script/Deploy.s.sol --rpc-url robinhood --broadcast --verify
 ```
 
-## Adresses utilisées sur Robinhood Chain (4663)
+## Addresses used on Robinhood Chain (4663)
 
-| Contrat | Adresse |
+| Contract | Address |
 |---|---|
 | USDG | 0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168 |
 | Uniswap v4 PositionManager | 0x58daec3116aae6D93017bAAea7749052E8a04fA7 |
 | Uniswap v4 StateView | 0xF3334192D15450CdD385c8B70e03f9A6bD9E673b |
 | Uniswap v4 PoolManager | 0x8366a39CC670B4001A1121B8F6A443A643e40951 |
 
-RPC : https://rpc.mainnet.chain.robinhood.com. Explorateur : https://robinhoodchain.blockscout.com. Les adresses viennent de la page d'adresses de Gage et doivent être revérifiées sur l'explorateur avant tout déploiement.
+RPC: https://rpc.mainnet.chain.robinhood.com. Explorer: https://robinhoodchain.blockscout.com. USDG
+sits behind an upgradeable proxy and exposes `paused()`: if its issuer ever pauses it, rent stops
+accruing on every deal at once and no USDG moves until it resumes.
 
-## Références
+## References
 
-- [Statement SEC, Innovation Exemption, 17 septembre 2026](https://www.sec.gov/newsroom/speeches-statements/uyeda-statement-innovation-exemption-091726)
-- [Communiqué SEC 2026-90](https://www.sec.gov/newsroom/press-releases/2026-90-sec-issues-innovation-exemption-facilitate-trading-tokenized-nms-stock-request-comment)
-- [CFTC, no-action pour les fournisseurs de logiciels passifs, 17 septembre 2026](https://www.cftc.gov/PressRoom/PressReleases/9300-26)
+- [SEC, statement on the innovation exemption](https://www.sec.gov/newsroom/speeches-statements/uyeda-statement-innovation-exemption-091726)
+- [SEC press release 2026-90](https://www.sec.gov/newsroom/press-releases/2026-90-sec-issues-innovation-exemption-facilitate-trading-tokenized-nms-stock-request-comment)
+- [CFTC, no-action for passive software providers](https://www.cftc.gov/PressRoom/PressReleases/9300-26)
 - [Robinhood Chain, Stock Tokens](https://docs.robinhood.com/chain/stock-tokens/)
 - [Uniswap v4, PositionManager](https://developers.uniswap.org/docs/protocols/v4/guides/position-manager)
-- [Gage, adresses de protocole](https://docs.gage.cash/protocol/addresses)

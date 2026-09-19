@@ -278,5 +278,108 @@ class EnvelopeTest(unittest.TestCase):
             self.assertEqual(proof["txHash"], TX)
 
 
+
+class ConcurrencyTest(unittest.TestCase):
+    """Regressions for the findings of the concurrency review."""
+
+    def setUp(self):
+        from lpval import server
+
+        self.server = server
+        server._cache.clear()
+        server._inflight.clear()
+
+    def test_a_failed_leader_does_not_serve_a_stale_entry(self):
+        import threading, time as t
+
+        key = ("stale", 0)
+        self.server._cache[key] = (t.time() - 3600, {"old": True})
+        seen = []
+
+        def build():
+            t.sleep(0.2)
+            raise RuntimeError("upstream down")
+
+        def run():
+            try:
+                seen.append(("ok", self.server._cached(key, build)))
+            except Exception as exc:
+                seen.append(("err", type(exc).__name__))
+
+        threads = [threading.Thread(target=run) for _ in range(6)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join(10)
+        self.assertTrue(all(kind == "err" for kind, _ in seen), seen)
+
+    def test_a_failed_leader_does_not_cause_a_stampede(self):
+        import threading, time as t
+
+        builds = []
+        lock = threading.Lock()
+
+        def build():
+            with lock:
+                builds.append(1)
+            t.sleep(0.2)
+            raise RuntimeError("upstream down")
+
+        def run():
+            try:
+                self.server._cached(("boom", 0), build)
+            except Exception:
+                pass
+
+        threads = [threading.Thread(target=run) for _ in range(12)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join(10)
+        self.assertEqual(len(builds), 1, f"{len(builds)} builds for 12 concurrent requests")
+
+    def test_the_leader_is_deduplicated_on_the_happy_path(self):
+        import threading, time as t
+
+        builds = []
+
+        def build():
+            builds.append(1)
+            t.sleep(0.2)
+            return {"value": 1}
+
+        out = []
+        threads = [threading.Thread(target=lambda: out.append(self.server._cached(("ok", 0), build))) for _ in range(12)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join(10)
+        self.assertEqual(len(builds), 1)
+        self.assertEqual(len(out), 12)
+        self.assertTrue(all(o == {"value": 1} for o in out))
+
+
+class RpcErrorShapeTest(unittest.TestCase):
+    def test_a_revert_and_an_unreachable_node_are_different(self):
+        from lpval.rpc import REVERTED, UNAVAILABLE, Rpc
+
+        revert = {"error": {"code": 3, "message": "execution reverted"}}
+        reverted_by_text = {"error": {"code": -32000, "message": "execution reverted: bad token"}}
+        rate_limited = {"error": {"code": -32005, "message": "rate limit exceeded"}}
+        self.assertIs(Rpc._item_result(revert), REVERTED)
+        self.assertIs(Rpc._item_result(reverted_by_text), REVERTED)
+        self.assertIs(Rpc._item_result(rate_limited), UNAVAILABLE)
+        self.assertIs(Rpc._item_result(None), UNAVAILABLE)
+        self.assertEqual(Rpc._item_result({"result": "0x01"}), "0x01")
+
+
+class ChatInjectionTest(unittest.TestCase):
+    def test_a_bare_url_cannot_render_as_a_link(self):
+        from api import waitlist
+
+        cleaned = waitlist._safe("https://evil.example/?x=y@z.co")
+        for ch in ":/?=&@":
+            self.assertNotIn(ch, cleaned)
+
 if __name__ == "__main__":
     unittest.main()

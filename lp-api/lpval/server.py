@@ -31,6 +31,19 @@ _cache = OrderedDict()
 _cache_lock = threading.Lock()
 _inflight = {}
 _slots = threading.Semaphore(_CONCURRENCY)
+_BUILD_BUDGET = 25.0  # wall clock a single valuation may spend upstream
+
+
+class _Flight:
+    """One in-progress build. Followers read its outcome instead of repeating the work, and get the
+    leader's exception rather than a stale value or a stampede."""
+
+    __slots__ = ("event", "value", "exc")
+
+    def __init__(self):
+        self.event = threading.Event()
+        self.value = None
+        self.exc = None
 
 
 def _num(qs, key, default, lo, hi, cast=float):
@@ -45,38 +58,48 @@ def _num(qs, key, default, lo, hi, cast=float):
 
 def _cached(key, build):
     """One valuation per key at a time. Without this, twenty people opening the same position
-    produce twenty identical round trips to the node and rate-limit us against ourselves."""
-    now = time.time()
+    produce twenty identical round trips to the node and rate-limit us against ourselves.
+
+    A follower never falls back to building on its own: when the leader fails, every waiter would
+    then build at once, which is a stampede at exactly the moment the upstream is already in
+    trouble. They get the leader's exception instead. And a follower never reads the cache, so a
+    stale entry can never be served as if it were fresh.
+    """
     with _cache_lock:
         hit = _cache.get(key)
-        if hit and now - hit[0] < _CACHE_TTL:
+        if hit and time.time() - hit[0] < _CACHE_TTL:
             _cache.move_to_end(key)
             return hit[1]
-        event = _inflight.get(key)
-        leader = event is None
+        flight = _inflight.get(key)
+        leader = flight is None
         if leader:
-            event = threading.Event()
-            _inflight[key] = event
+            flight = _Flight()
+            _inflight[key] = flight
+
     if not leader:
-        event.wait(timeout=30)
-        with _cache_lock:
-            hit = _cache.get(key)
-        if hit:
-            return hit[1]
-        # The leader failed; fall through and try once ourselves rather than inventing an error.
+        if not flight.event.wait(timeout=_BUILD_BUDGET + 5):
+            raise UpstreamError("timed out waiting for a valuation already in flight")
+        if flight.exc is not None:
+            raise flight.exc
+        return flight.value
+
     try:
-        value = build()
+        flight.value = build()
         with _cache_lock:
-            _cache[key] = (time.time(), value)
+            _cache[key] = (time.time(), flight.value)
             _cache.move_to_end(key)
             while len(_cache) > _CACHE_MAX:
                 _cache.popitem(last=False)
-        return value
+        return flight.value
+    except BaseException as exc:
+        flight.exc = exc
+        raise
     finally:
+        # Only the leader may retire its own flight, and it is the only one that can reach here.
         with _cache_lock:
-            if _inflight.get(key) is event:
+            if _inflight.get(key) is flight:
                 del _inflight[key]
-        event.set()
+        flight.event.set()
 
 
 def make_handler(rpc: Rpc, paywall: Paywall):
@@ -161,15 +184,20 @@ def make_handler(rpc: Rpc, paywall: Paywall):
 
             qs = parse_qs(url.query)
             lookback = int(_num(qs, "lookbackHours", 24.0, 0.0, 720.0))
+
+            def build():
+                rpc.set_deadline(_BUILD_BUDGET)
+                return value_position(rpc, token_id, lookback_hours=lookback)
+
             try:
-                val = _cached((token_id, lookback), lambda: value_position(rpc, token_id, lookback_hours=lookback))
+                val = _cached((token_id, lookback), build)
             except PositionNotFound as exc:
-                if spent_hash:
-                    paywall.release(spent_hash)  # they paid for an answer we could not give
+                # A token id the caller chose and that does not exist is a real answer, so the
+                # payment stands. Refunding here would let one payment buy unlimited failed work.
                 return self._send(404, {"error": "position_not_found", "detail": str(exc)})
-            except (UpstreamError, Exception):
+            except Exception:
                 if spent_hash:
-                    paywall.release(spent_hash)
+                    paywall.release(spent_hash)  # our fault, so they can retry with the same proof
                 return self._send(502, {"error": "upstream_error", "message": "the chain could not be read right now"})
 
             if m.group(2):

@@ -20,6 +20,8 @@ from api.waitlist import process, read_length  # noqa: E402
 
 
 class Handler(SimpleHTTPRequestHandler):
+    timeout = 15  # otherwise a half-sent body pins a thread for as long as the client likes
+
     def do_POST(self):  # noqa: N802
         if self.path.rstrip("/") != "/api/waitlist":
             return self.send_error(404)

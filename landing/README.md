@@ -1,42 +1,55 @@
-# Landing et waitlist
+# Landing page and waitlist
 
-Page statique plus un endpoint d'inscription. Aucune dépendance, aucun build.
+A static page plus a signup endpoint. No dependency, no build step.
 
 ```
-index.html          la page, CSS et JS inclus
-assets/             logo, favicon, image de partage
-api/waitlist.py     endpoint POST /api/waitlist (fonction Python Vercel)
-dev_server.py       aperçu local, bibliothèque standard uniquement
+index.html          the page, CSS and JS included
+assets/             logo, favicon, share image
+api/waitlist.py     the POST /api/waitlist endpoint (a Vercel Python function)
+dev_server.py       local preview, standard library only
 ```
 
-## Aperçu local
+## Local preview
 
 ```bash
 python dev_server.py
 ```
 
-Puis ouvrir http://127.0.0.1:8410. En local, les inscriptions s'ajoutent à `waitlist.jsonl`, une ligne JSON par personne, sans doublon.
+Then open http://127.0.0.1:8410. Locally, signups are appended to `../.waitlist/waitlist.jsonl`, one
+JSON object per line. That path is deliberately outside the directory the dev server hands out, and
+the server only serves the page and its assets, because it sits next to source and local state.
 
-## Où vont les inscriptions en production
+Duplicates are removed when the list is read, not on the way in: re-reading the whole file on every
+signup is linear in its size, and the check-then-append it would need races between concurrent
+requests anyway.
 
-L'endpoint lit la variable `WAITLIST_WEBHOOK_URL` et y envoie chaque inscription en POST JSON.
+## Where signups go in production
 
-- **Webhook Discord.** Le plus rapide : dans un salon privé, Paramètres, Intégrations, Webhooks, copier l'URL. Chaque inscription arrive comme un message. L'URL est détectée et le message est mis au format Discord.
-- **Google Sheets, Make, Zapier ou ta propre API.** Toute autre URL reçoit `{"email", "role", "source", "ts"}`.
+The endpoint reads `WAITLIST_WEBHOOK_URL` and POSTs each signup there as JSON.
 
-Sans cette variable, un déploiement Vercel répond 503 au lieu de perdre des inscriptions en silence.
+- **A Discord webhook.** The quickest route: in a private channel, Settings, Integrations, Webhooks,
+  copy the URL. Each signup arrives as a message. The URL is detected and the message is shaped for
+  Discord, with the email stripped of anything that could render as a link.
+- **Google Sheets, Make, Zapier or your own API.** Any other URL receives
+  `{"email", "role", "source", "ts"}`.
 
-Garde-fous inclus : validation de l'email côté page et côté serveur, champ piège pour les robots, corps de requête limité à 4 Ko, rôles et sources restreints à une liste.
+Without that variable, a Vercel deployment answers 503 rather than dropping signups silently.
 
-## Déployer sur Vercel
+Guards in place: email validated on the page and on the server, a honeypot field for bots, the
+request body capped and a negative `Content-Length` refused, roles and sources restricted to a list,
+the same answer whether or not an address was already on the list so the endpoint is not a membership
+oracle, and no redirects followed on the outbound webhook.
 
-1. Créer un projet Vercel dont la racine est ce dossier `landing`. Aucun framework, aucune commande de build.
-2. Ajouter la variable d'environnement `WAITLIST_WEBHOOK_URL`.
-3. Déployer. `index.html` est servi à la racine et `api/waitlist.py` devient `/api/waitlist`.
+## Deploying to Vercel
 
-## Avant de publier
+1. Create a Vercel project whose root is this `landing` folder. No framework, no build command.
+2. Add the `WAITLIST_WEBHOOK_URL` environment variable.
+3. Deploy. `index.html` is served at the root and `api/waitlist.py` becomes `/api/waitlist`.
 
-- Le nom « Tenure » est un nom de travail. Vérifier la marque et le domaine.
-- Relire les affirmations de la section Status à chaque évolution : nombre de tests, audit, déploiement.
-- L'image de partage `og:image` doit être une URL absolue une fois le domaine connu.
-- Les emails sont des données personnelles. Le pied de page promet un seul usage et la suppression sur demande : s'y tenir, et prévoir une adresse de contact.
+## Before publishing
+
+- "Tenure" is a working name. Check the trademark and the domain.
+- Re-read the claims in the Status section on every change: number of tests, audit, deployment.
+- The `og:image` share image must be an absolute URL once the domain is known.
+- Emails are personal data. The footer promises a single use and deletion on request: honour that,
+  and provide a contact address.

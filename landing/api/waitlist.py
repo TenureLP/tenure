@@ -22,7 +22,10 @@ EMAIL = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
 ROLES = {"lp", "financier", "both"}
 SOURCES = {"hero", "footer"}
 MAX_BODY = 4096
-UNSAFE_IN_CHAT = re.compile(r"[`\\\[\]()<>*_~|]")
+# Anything that could turn a signup into a clickable link or formatted text in a chat client.
+# The colon and slash matter as much as the brackets: `https://evil.example/?x=y@z.co` is a valid
+# email as far as the regex above is concerned, and both Slack and Discord auto-link a bare URL.
+UNSAFE_IN_CHAT = re.compile(r"[`\\\[\]()<>*_~|:/?=&#@]")
 _file_lock = threading.Lock()
 
 
@@ -32,9 +35,10 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def _safe(text: str) -> str:
-    """The email ends up in a chat message the team reads. Left raw, a signup could close a code
-    span and render as a link: a phishing message wearing our own alert bot's face."""
-    return UNSAFE_IN_CHAT.sub("", text)
+    """The email ends up in a chat message the team reads. Left raw, a signup could render as a
+    link: a phishing message wearing our own alert bot's face. The address is deliberately mangled
+    rather than escaped; the exact value is in the record the webhook also receives."""
+    return UNSAFE_IN_CHAT.sub(" ", text)
 
 
 def _deliver_webhook(url: str, record: dict):
