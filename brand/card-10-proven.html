@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tenure card</title>
+<style>
+  :root {
+    --navy-lo:#0A111D; --navy:#0E1726; --navy-hi:#1B2B48; --panel:#121D31;
+    --ink:#F4F1EA; --amber:#F5B84B; --amber-hi:#FFD683;
+    --muted:rgba(244,241,234,.58); --faint:rgba(244,241,234,.34);
+    --line:rgba(244,241,234,.11); --line-hi:rgba(244,241,234,.20);
+    --green:#7BE0A6; --dim:rgba(244,241,234,.28);
+  }
+  * { box-sizing:border-box; margin:0 }
+  html,body { width:1600px; height:900px; overflow:hidden }
+  body {
+    background: radial-gradient(1100px 700px at 78% 18%, rgba(27,43,72,.85), transparent 70%),
+                linear-gradient(158deg, var(--navy-lo), var(--navy) 58%, #13203a);
+    color: var(--ink);
+    font-family: Bahnschrift, "DIN Alternate", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: 58px 66px;
+    display:flex; flex-direction:column;
+  }
+  .top { display:flex; align-items:center; justify-content:space-between; margin-bottom:38px; flex:none }
+  .brand { display:flex; align-items:center; gap:16px; font-size:33px; font-weight:600; letter-spacing:-.01em }
+  .brand svg { width:50px; height:50px }
+  .tag { font-size:16px; font-weight:600; letter-spacing:.2em; color:var(--amber) }
+
+  h1 { font-size:54px; font-weight:700; letter-spacing:-.02em; line-height:1.06; margin-bottom:12px }
+  h1 b { color:var(--amber); font-weight:700 }
+  .sub { font-size:23px; color:var(--muted); margin-bottom:36px; max-width:1180px; line-height:1.35 }
+
+  .grow { flex:1; display:flex; flex-direction:column; justify-content:center }
+  .foot { flex:none; margin-top:36px; padding-top:22px; border-top:1px solid var(--line);
+          font-size:21px; color:var(--muted) }
+  .foot b { color:var(--ink); font-weight:600 }
+
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:26px 30px }
+  .mono { font-family: Consolas, "SF Mono", Menlo, monospace }
+  .eyebrow { font-size:14px; font-weight:600; letter-spacing:.2em; color:var(--faint); margin-bottom:14px }
+
+  .checks { display:flex; flex-direction:column; gap:1px; background:var(--line);
+            border:1px solid var(--line); border-radius:16px; overflow:hidden }
+  .row { background:var(--panel); padding:12px 26px; display:flex; align-items:flex-start; gap:18px }
+  .tick { color:var(--green); font-size:21px; line-height:1.24; flex:none }
+  .claim { font-size:22px; line-height:1.24 }
+  .how { font-size:17px; color:var(--faint); margin-top:3px; line-height:1.25 }
+</style>
+</head>
+<body>
+<div class="top"><div class="brand"><svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="30" width="11" height="30" rx="2.5" fill="#F5B84B"/><rect x="19.5" y="18" width="11" height="42" rx="2.5" fill="#F5B84B" opacity=".72"/><rect x="35" y="8" width="11" height="52" rx="2.5" fill="#F5B84B" opacity=".46"/><rect x="50.5" y="24" width="11" height="36" rx="2.5" fill="#F5B84B" opacity=".26"/></svg><span>Tenure</span></div><div class="tag">WHAT IS PROVEN</div></div>
+
+<h1>Counting tests proves nothing. <b>Here is what they hold.</b></h1>
+<div class="grow">
+  <div class="checks">
+    <div class="row"><div class="tick">&#10003;</div><div class="t"><div class="claim">The vault never owes more than it holds</div><div class="how">stateful fuzz over random action sequences, 5,000 of them on every push</div></div></div><div class="row"><div class="tick">&#10003;</div><div class="t"><div class="claim">Rent paid out never exceeds the rent escrowed at funding</div><div class="how">the same fuzz, with builder fees being paid on both sides</div></div></div><div class="row"><div class="tick">&#10003;</div><div class="t"><div class="claim">The lessee collects fees and can never withdraw liquidity</div><div class="how">forked against the real Uniswap v4 PositionManager on chain 4663</div></div></div><div class="row"><div class="tick">&#10003;</div><div class="t"><div class="claim">A financier taking delivery gets a position they can unwind</div><div class="how">forked, against live chain state rather than a mock</div></div></div><div class="row"><div class="tick">&#10003;</div><div class="t"><div class="claim">One payment buys one request, once</div><div class="how">a ledger that refuses to boot when its disk is disposable</div></div></div><div class="row"><div class="tick">&#10003;</div><div class="t"><div class="claim">A transaction hash on its own buys nothing</div><div class="how">it is public once mined, so the payer has to sign as well</div></div></div><div class="row"><div class="tick">&#10003;</div><div class="t"><div class="claim">The published description matches the running service</div><div class="how">the build fails if a route is served and undocumented, or the reverse</div></div></div>
+  </div>
+</div>
+<div class="foot">47 contract tests, 69 for the services. <b>Not established: no independent audit,
+  no contract deployed.</b></div>
+
+</body>
+</html>

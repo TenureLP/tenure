@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tenure card</title>
+<style>
+  :root {
+    --navy-lo:#0A111D; --navy:#0E1726; --navy-hi:#1B2B48; --panel:#121D31;
+    --ink:#F4F1EA; --amber:#F5B84B; --amber-hi:#FFD683;
+    --muted:rgba(244,241,234,.58); --faint:rgba(244,241,234,.34);
+    --line:rgba(244,241,234,.11); --line-hi:rgba(244,241,234,.20);
+    --green:#7BE0A6; --dim:rgba(244,241,234,.28);
+  }
+  * { box-sizing:border-box; margin:0 }
+  html,body { width:1600px; height:900px; overflow:hidden }
+  body {
+    background: radial-gradient(1100px 700px at 78% 18%, rgba(27,43,72,.85), transparent 70%),
+                linear-gradient(158deg, var(--navy-lo), var(--navy) 58%, #13203a);
+    color: var(--ink);
+    font-family: Bahnschrift, "DIN Alternate", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: 58px 66px;
+    display:flex; flex-direction:column;
+  }
+  .top { display:flex; align-items:center; justify-content:space-between; margin-bottom:38px; flex:none }
+  .brand { display:flex; align-items:center; gap:16px; font-size:33px; font-weight:600; letter-spacing:-.01em }
+  .brand svg { width:50px; height:50px }
+  .tag { font-size:16px; font-weight:600; letter-spacing:.2em; color:var(--amber) }
+
+  h1 { font-size:54px; font-weight:700; letter-spacing:-.02em; line-height:1.06; margin-bottom:12px }
+  h1 b { color:var(--amber); font-weight:700 }
+  .sub { font-size:23px; color:var(--muted); margin-bottom:36px; max-width:1180px; line-height:1.35 }
+
+  .grow { flex:1; display:flex; flex-direction:column; justify-content:center }
+  .foot { flex:none; margin-top:36px; padding-top:22px; border-top:1px solid var(--line);
+          font-size:21px; color:var(--muted) }
+  .foot b { color:var(--ink); font-weight:600 }
+
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:26px 30px }
+  .mono { font-family: Consolas, "SF Mono", Menlo, monospace }
+  .eyebrow { font-size:14px; font-weight:600; letter-spacing:.2em; color:var(--faint); margin-bottom:14px }
+
+  .refus { display:flex; flex-direction:column; gap:10px }
+  .r { background:var(--panel); border:1px solid var(--line); border-radius:14px;
+       padding:16px 26px; display:grid; grid-template-columns:430px 230px 1fr; gap:26px;
+       align-items:baseline }
+  .when { font-size:22px; color:var(--ink) }
+  .ans { font-size:19px; color:var(--amber); font-weight:600 }
+  .why { font-size:18px; color:var(--faint); line-height:1.3 }
+</style>
+</head>
+<body>
+<div class="top"><div class="brand"><svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="30" width="11" height="30" rx="2.5" fill="#F5B84B"/><rect x="19.5" y="18" width="11" height="42" rx="2.5" fill="#F5B84B" opacity=".72"/><rect x="35" y="8" width="11" height="52" rx="2.5" fill="#F5B84B" opacity=".46"/><rect x="50.5" y="24" width="11" height="36" rx="2.5" fill="#F5B84B" opacity=".26"/></svg><span>Tenure</span></div><div class="tag">WHAT IT REFUSES</div></div>
+
+<h1>The interesting part is <b>what it says no to.</b></h1>
+<div class="sub">Anything can return a number. These are the cases where returning one would have
+  been worse than refusing.</div>
+<div class="grow">
+  <div class="refus">
+    <div class="r"><div class="when">A position holding no liquidity</div><div class="ans">no quote, and why</div><div class="why">There is no usufruct to lease. A price of zero is not an answer.</div></div><div class="r"><div class="when">A fee counter that has wrapped around</div><div class="ans">no quote, and why</div><div class="why">The figures are garbage. Half of garbage is still garbage.</div></div><div class="r"><div class="when">A buyback above the sale price</div><div class="ans">the listing reverts</div><div class="why">That is a guaranteed spread on top of the rent, wearing the clothes of a sale.</div></div><div class="r"><div class="when">A signup with nowhere to deliver it</div><div class="ans">503, not 200</div><div class="why">Refusing an address is recoverable. Accepting one and losing it is not.</div></div><div class="r"><div class="when">A payment ledger on a disposable disk</div><div class="ans">it will not start</div><div class="why">Every spent payment would be forgotten, and each could be spent again.</div></div>
+  </div>
+</div>
+<div class="foot">Each of these has a test that fails without it. <b>github.com/TenureLP/tenure</b></div>
+
+</body>
+</html>

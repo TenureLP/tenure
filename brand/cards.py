@@ -3,12 +3,13 @@
     python3 cards.py            writes card-*.html next to this file
     ./render-cards.ps1          rasterises them with headless Chrome
 
-Eight of the fifteen posts carry a card. The other seven read better as plain text: an image on
-every post looks like a content mill, and X does not reward it. A card earns its place only where
-the drawing shows the mechanism better than the sentence does.
+Eleven cards for eighteen posts. The rest read better as plain text: an image on every post looks
+like a content mill, and X does not reward it. A card earns its place only where the drawing shows
+the mechanism better than the sentence does.
 
-Every figure here is real. Card 3 in particular is a live position and goes stale: re-run
-`lp-api/run.sh position 2908254 --quote` and update POSITION below before posting it.
+Every figure here is real, which means some of them go stale. Card 3 and card 9 both quote a live
+position, and positions get emptied: 2908254 was worth 489 USDG in the morning and nothing by the
+evening. Re-run `lp-api/run.sh position <id> --quote` and update the figures before posting either.
 """
 
 import io
@@ -401,6 +402,146 @@ CARD8 = page(
 """,
 )
 
+
+# ---------------------------------------------------------------------- 9, first on the launchpad
+
+CARD9 = page(
+    "VERIFIABLE",
+    """
+<h1>First API on the launchpad. <b>Check it yourself.</b></h1>
+<div class="sub">A screenshot proves somebody can take a screenshot. Every line below is a command,
+  and the output is what it returned.</div>
+<div class="grow">
+  <div class="term mono">
+    <div class="ln"><span class="p">$</span> curl -s olanas.xyz/api/services</div>
+    <div class="out">{ "total": <b>1</b>, "services": [ { "slug": "tenure-position-valuation",
+      "status": "live", "price": "0.003", "currency": "USDG" } ] }</div>
+
+    <div class="ln"><span class="p">$</span> curl -i olanas.xyz/x402/tenure-position-valuation</div>
+    <div class="out"><span class="code">HTTP/2 402</span>
+      { "scheme": "onchain-tx", "network": "eip155:4663",
+      &nbsp;&nbsp;"amount": "3000", "asset": "0x5fc5&hellip;d168" }
+      <span class="note">3000 units of a 6-decimal token. 0.003 USDG.</span></div>
+
+    <div class="ln"><span class="p">$</span> curl -s api&hellip;/v1/position/2908273/quote</div>
+    <div class="out">{ "suggestedSalePriceUSDG": <b>0.64</b>,
+      "suggestedBuybackPriceUSDG": <b>0.64</b>, "suggestedRentUSDG": <b>0.14</b> }</div>
+  </div>
+</div>
+<div class="foot">Buyback equals the sale price, because that one is enforced in the contract, not
+  in the interface. <b>github.com/TenureLP/tenure</b></div>
+""",
+    """
+  .term { background:#0A1322; border:1px solid var(--line); border-radius:18px; padding:30px 34px;
+          font-size:20px; line-height:1.5 }
+  .ln { color:var(--ink); margin-top:20px; font-size:21px }
+  .ln:first-child { margin-top:0 }
+  .p { color:var(--amber); margin-right:10px }
+  .out { color:var(--muted); margin-top:9px; padding-left:26px; border-left:2px solid var(--line) }
+  .out b { color:var(--amber); font-weight:700 }
+  .code { display:inline-block; color:var(--green); margin-right:12px }
+  .note { display:block; color:var(--faint); font-family:Bahnschrift,sans-serif; font-size:17px;
+          margin-top:6px }
+""",
+)
+
+# ---------------------------------------------------------------------- 10, what the tests prove
+
+CHECKS = [
+    ("The vault never owes more than it holds",
+     "stateful fuzz over random action sequences, 5,000 of them on every push"),
+    ("Rent paid out never exceeds the rent escrowed at funding",
+     "the same fuzz, with builder fees being paid on both sides"),
+    ("The lessee collects fees and can never withdraw liquidity",
+     "forked against the real Uniswap v4 PositionManager on chain 4663"),
+    ("A financier taking delivery gets a position they can unwind",
+     "forked, against live chain state rather than a mock"),
+    ("One payment buys one request, once",
+     "a ledger that refuses to boot when its disk is disposable"),
+    ("A transaction hash on its own buys nothing",
+     "it is public once mined, so the payer has to sign as well"),
+    ("The published description matches the running service",
+     "the build fails if a route is served and undocumented, or the reverse"),
+]
+
+CARD10 = page(
+    "WHAT IS PROVEN",
+    """
+<h1>Counting tests proves nothing. <b>Here is what they hold.</b></h1>
+<div class="grow">
+  <div class="checks">
+    """
+    + "".join(
+        '<div class="row"><div class="tick">&#10003;</div><div class="t">'
+        '<div class="claim">%s</div><div class="how">%s</div></div></div>' % (c, h)
+        for c, h in CHECKS
+    )
+    + """
+  </div>
+</div>
+<div class="foot">47 contract tests, 69 for the services. <b>Not established: no independent audit,
+  no contract deployed.</b></div>
+""",
+    """
+  .checks { display:flex; flex-direction:column; gap:1px; background:var(--line);
+            border:1px solid var(--line); border-radius:16px; overflow:hidden }
+  .row { background:var(--panel); padding:12px 26px; display:flex; align-items:flex-start; gap:18px }
+  .tick { color:var(--green); font-size:21px; line-height:1.24; flex:none }
+  .claim { font-size:22px; line-height:1.24 }
+  .how { font-size:17px; color:var(--faint); margin-top:3px; line-height:1.25 }
+""",
+)
+
+# ---------------------------------------------------------------------- 11, the refusals
+
+REFUSALS = [
+    ("A position holding no liquidity",
+     "no quote, and why",
+     "There is no usufruct to lease. A price of zero is not an answer."),
+    ("A fee counter that has wrapped around",
+     "no quote, and why",
+     "The figures are garbage. Half of garbage is still garbage."),
+    ("A buyback above the sale price",
+     "the listing reverts",
+     "That is a guaranteed spread on top of the rent, wearing the clothes of a sale."),
+    ("A signup with nowhere to deliver it",
+     "503, not 200",
+     "Refusing an address is recoverable. Accepting one and losing it is not."),
+    ("A payment ledger on a disposable disk",
+     "it will not start",
+     "Every spent payment would be forgotten, and each could be spent again."),
+]
+
+CARD11 = page(
+    "WHAT IT REFUSES",
+    """
+<h1>The interesting part is <b>what it says no to.</b></h1>
+<div class="sub">Anything can return a number. These are the cases where returning one would have
+  been worse than refusing.</div>
+<div class="grow">
+  <div class="refus">
+    """
+    + "".join(
+        '<div class="r"><div class="when">%s</div><div class="ans">%s</div>'
+        '<div class="why">%s</div></div>' % (w, a, y)
+        for w, a, y in REFUSALS
+    )
+    + """
+  </div>
+</div>
+<div class="foot">Each of these has a test that fails without it. <b>github.com/TenureLP/tenure</b></div>
+""",
+    """
+  .refus { display:flex; flex-direction:column; gap:10px }
+  .r { background:var(--panel); border:1px solid var(--line); border-radius:14px;
+       padding:16px 26px; display:grid; grid-template-columns:430px 230px 1fr; gap:26px;
+       align-items:baseline }
+  .when { font-size:22px; color:var(--ink) }
+  .ans { font-size:19px; color:var(--amber); font-weight:600 }
+  .why { font-size:18px; color:var(--faint); line-height:1.3 }
+""",
+)
+
 CARDS = [
     ("card-1-acts.html", CARD1),
     ("card-2-not-a-loan.html", CARD2),
@@ -410,6 +551,9 @@ CARDS = [
     ("card-6-one-line.html", CARD6),
     ("card-7-freeze.html", CARD7),
     ("card-8-roadmap.html", CARD8),
+    ("card-9-first.html", CARD9),
+    ("card-10-proven.html", CARD10),
+    ("card-11-refuses.html", CARD11),
 ]
 
 if __name__ == "__main__":
