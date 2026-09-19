@@ -48,6 +48,12 @@ contract AssetRegistry {
     mapping(bytes32 poolId => PoolConfig) private _pools;
     mapping(uint32 term => bool) public termAllowed;
 
+    /// @notice Ceiling on the frozen time a single deal may accumulate, in basis points of its term.
+    /// @dev The freeze mechanism protects the lessee, and sampling cannot prove how long a halt
+    ///      really lasted, so without a ceiling a lessee who checkpoints during repeated brief halts
+    ///      can wipe out the rent. A financier funding a deal can read this and price it.
+    uint16 public maxFrozenBps = 2_500;
+
     uint32 public grace = 48 hours;
     uint32 public maxListingDuration = 7 days;
     uint128 public listingFee; // flat amount, never a percentage
@@ -63,6 +69,7 @@ contract AssetRegistry {
     );
     event TermSet(uint32 term, bool allowed);
     event GraceSet(uint32 grace);
+    event MaxFrozenBpsSet(uint16 bps);
     event MaxListingDurationSet(uint32 duration);
     event ListingFeeSet(uint128 fee);
     event FeeRecipientSet(address recipient);
@@ -131,6 +138,12 @@ contract AssetRegistry {
         if (term < MIN_TERM || term > MAX_TERM) revert BadTerm();
         termAllowed[term] = allowed;
         emit TermSet(term, allowed);
+    }
+
+    function setMaxFrozenBps(uint16 bps) external onlyOwner {
+        if (bps > 10_000) revert BadProbe();
+        maxFrozenBps = bps;
+        emit MaxFrozenBpsSet(bps);
     }
 
     function setGrace(uint32 grace_) external onlyOwner {

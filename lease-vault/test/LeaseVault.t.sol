@@ -8,7 +8,7 @@ import {IERC20} from "../src/interfaces/IERC20.sol";
 import {IPositionManager} from "../src/interfaces/IPositionManager.sol";
 import {IStateView} from "../src/interfaces/IStateView.sol";
 import {Currency, PoolKey, PoolIdLib, PoolId} from "../src/libraries/Types.sol";
-import {MockERC20, MockPausableERC20, MockReturnBombERC20} from "./mocks/MockERC20.sol";
+import {MockERC20, MockPausableERC20, MockReturnBombERC20, MockSilentERC20} from "./mocks/MockERC20.sol";
 import {MockPositionManager} from "./mocks/MockPositionManager.sol";
 import {MockStateView} from "./mocks/MockStateView.sol";
 
@@ -241,15 +241,57 @@ contract LeaseVaultTest is MiniTest {
         }
         stock.setPaused(false);
         vault.checkpointFreeze(id);
-        vm.warp(block.timestamp + 4 days); // day 7: 5 usable days
-        assertEq(uint256(vault.accruedRent(id)), 5_000_000);
+        vm.warp(block.timestamp + 4 days);
+        // The halt really lasted 2 days, but a deal may only credit 25% of its term as frozen, so
+        // 42 h of it counts and the lessee pays for the remaining 6. That ceiling is the price of
+        // making the sampling unexploitable; a pool whose tokens halt for longer needs it raised.
+        uint256 capped = uint256(TERM) * 2_500 / 10_000;
+        uint256 expected = uint256(RENT) * (TERM - capped) / TERM;
+        assertEq(uint256(vault.accruedRent(id)), expected);
 
         // Frozen time is refunded to the lessee at settlement.
         vm.warp(block.timestamp + GRACE);
         vm.prank(financier);
         vault.release(id);
-        assertEq(vault.balances(financier), 5_000_000);
-        assertEq(vault.balances(seller), PRICE - RENT - FEE + 2_000_000);
+        assertEq(vault.balances(financier), expected);
+        assertEq(vault.balances(seller), PRICE - RENT - FEE + (RENT - expected));
+    }
+
+    /// Repeated checkpoints during brief halts cannot wipe out the rent: sampling cannot tell a
+    /// week-long freeze from twenty-eight one-second ones, so the total is capped for the deal.
+    function test_rent_repeatedBriefHaltsCannotWipeOutTheRent() public {
+        uint256 id = _listAndFund();
+        for (uint256 i; i < 28; ++i) {
+            vm.warp(block.timestamp + 6 hours);
+            stock.setPaused(true);
+            vault.checkpointFreeze(id); // frozen for exactly this instant
+            stock.setPaused(false);
+        }
+        vm.warp(block.timestamp + TERM);
+        // 25% of the term is the ceiling the registry set, so three quarters of the rent survives.
+        assertEq(uint256(vault.accruedRent(id)), RENT - RENT / 4);
+    }
+
+    /// A token that answers the probe with nothing at all has no freeze switch, and must not be
+    /// read as permanently frozen: nobody could ever undo that.
+    function test_rent_silentTokenIsNotTreatedAsFrozen() public {
+        MockSilentERC20 silent = new MockSilentERC20();
+        (address c0, address c1) =
+            address(silent) < address(usdg) ? (address(silent), address(usdg)) : (address(usdg), address(silent));
+        PoolKey memory k = PoolKey(Currency.wrap(c0), Currency.wrap(c1), 3000, 60, address(0));
+        bytes32 pid = PoolId.unwrap(k.toId());
+        registry.setPool(pid, true, 1, 1, 1_000, bytes32(0));
+        stateView.setTick(pid, 0);
+        uint256 tid = posm.mint(seller, k, -600, 600, 10_000);
+        vm.prank(seller);
+        posm.approve(address(vault), tid);
+        vm.prank(seller);
+        uint256 id = vault.list(tid, PRICE, RENT, BUYBACK, TERM, 1 days);
+        vm.prank(financier);
+        vault.fund(id);
+        vm.warp(block.timestamp + TERM);
+        vault.checkpointFreeze(id);
+        assertEq(uint256(vault.accruedRent(id)), RENT); // full rent, nothing was ever frozen
     }
 
     /// An unobserved freeze cannot run forever: whoever opens it must keep proving it is still there.

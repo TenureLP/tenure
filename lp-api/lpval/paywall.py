@@ -16,6 +16,8 @@ Disabled unless LPVAL_PAY_TO is set, so the prototype runs free by default.
 """
 
 import base64
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -30,8 +32,10 @@ from .secp256k1 import BadSignature, personal_hash, recover
 MIN_CONFIRMATIONS = int(os.environ.get("LPVAL_MIN_CONFIRMATIONS", "3"))
 MAX_AGE_BLOCKS = 36_000  # about one hour of 100 ms blocks
 NONCE_TTL = 900  # seconds a challenge stays redeemable
-HASH_RE = re.compile(r"^0x[0-9a-f]{64}$")
-ADDR_RE = re.compile(r"^0x[0-9a-f]{40}$")
+# \Z, not $: in Python `$` also matches before a trailing newline, which would make "0xab..ab" and
+# "0xab..ab\n" two distinct keys in the spend ledger, and therefore one payment redeemable twice.
+HASH_RE = re.compile(r"^0x[0-9a-f]{64}\Z")
+ADDR_RE = re.compile(r"^0x[0-9a-f]{40}\Z")
 NATIVE_ASSET = "0x" + "0" * 40  # how x402 names a chain's own coin rather than a token
 
 
@@ -62,12 +66,49 @@ class Paywall:
         self._db.execute("PRAGMA journal_mode=WAL")
         # `ts` exists so spent payments can be pruned once they are past redeeming.
         self._db.execute("CREATE TABLE IF NOT EXISTS used (tx TEXT PRIMARY KEY, payer TEXT, route TEXT, ts INTEGER)")
-        self._db.execute("CREATE TABLE IF NOT EXISTS nonce (n TEXT PRIMARY KEY, route TEXT, ts INTEGER)")
+        # A ledger written before `ts` existed must still open, or the service will not start at all
+        # on any machine that has already taken a payment.
+        columns = {row[1] for row in self._db.execute("PRAGMA table_info(used)")}
+        if "ts" not in columns:
+            self._db.execute("ALTER TABLE used ADD COLUMN ts INTEGER")
+            self._db.execute("UPDATE used SET ts = ? WHERE ts IS NULL", (int(time.time()),))
+        # A payment may be handed back once when we fail to deliver. Recording that stops the refund
+        # from being a free-work tap: pay once, fail on purpose, retry, forever.
+        self._db.execute("CREATE TABLE IF NOT EXISTS refunded (tx TEXT PRIMARY KEY, ts INTEGER)")
         self._db.execute("CREATE INDEX IF NOT EXISTS used_ts ON used (ts)")
         self._db.commit()
         self._last_prune = 0.0
+        # Keyed, so a nonce can be verified by recomputation rather than stored. Set it in the
+        # environment to keep challenges valid across a restart or across several workers.
+        key = os.environ.get("LPVAL_NONCE_KEY")
+        self._nonce_key = key.encode() if key else secrets.token_bytes(32)
 
     # ------------------------------------------------------------------ challenge
+
+    def _mint_nonce(self, route: str) -> str:
+        """A nonce nobody but this server can produce, and that costs nothing to issue.
+
+        It used to be a row in SQLite, which made every anonymous request an unauthenticated write:
+        a few hundred GETs a second filled the table with challenges nobody would ever redeem. It is
+        now a timestamp plus a keyed digest over the route, so it is verified by recomputation.
+        Single use is not this value's job; the spend ledger already makes each payment single use.
+        """
+        stamp = format(int(time.time()), "x").rjust(8, "0")
+        mac = hmac.new(self._nonce_key, f"{stamp}|{route}".encode(), hashlib.sha256).hexdigest()[:24]
+        return stamp + mac
+
+    def _nonce_valid(self, nonce: str, route: str) -> bool:
+        if not isinstance(nonce, str) or len(nonce) != 32:
+            return False
+        stamp, mac = nonce[:8], nonce[8:]
+        try:
+            issued = int(stamp, 16)
+        except ValueError:
+            return False
+        if not 0 <= time.time() - issued <= NONCE_TTL:
+            return False
+        expect = hmac.new(self._nonce_key, f"{stamp}|{route}".encode(), hashlib.sha256).hexdigest()[:24]
+        return hmac.compare_digest(mac, expect)
 
     def challenge(self, route: str, base_url: str = "") -> dict:
         """An x402 version 2 envelope, so any client built for the standard understands the shape.
@@ -76,10 +117,7 @@ class Paywall:
         the payer's signature, because a transaction hash is public the moment it is mined and would
         otherwise be a bearer token. A client that ignores `extra` fails closed, which is the point.
         """
-        nonce = secrets.token_hex(16)
-        with self._lock:
-            self._db.execute("INSERT OR REPLACE INTO nonce VALUES (?,?,?)", (nonce, route, int(time.time())))
-            self._db.commit()
+        nonce = self._mint_nonce(route)
         self._maybe_prune()
         return {
             "x402Version": 2,
@@ -189,7 +227,6 @@ class Paywall:
             return False, reason, None
         if not self._spend(tx_hash, payer, route):
             return False, "payment already used", None
-        self._consume_nonce(proof["nonce"])
         return True, "ok", {
             "success": True,
             "scheme": "onchain-tx",
@@ -255,23 +292,23 @@ class Paywall:
             except sqlite3.IntegrityError:
                 return False
 
-    def release(self, tx_hash: str) -> None:
-        """Give a payment back after a failure on our side, so the payer is not charged for nothing."""
+    def release(self, tx_hash: str, payer: str, route: str) -> bool:
+        """Hand a payment back after a failure on our side, at most once, and only to the request
+        that claimed it. Without both limits this is a tap for unlimited free work, and one refactor
+        away from letting anyone free somebody else's payment."""
+        tx_hash, payer = tx_hash.lower(), payer.lower()
         with self._lock:
-            self._db.execute("DELETE FROM used WHERE tx=?", (tx_hash.lower(),))
+            if self._db.execute("SELECT 1 FROM refunded WHERE tx=?", (tx_hash,)).fetchone():
+                return False
+            row = self._db.execute("SELECT payer, route FROM used WHERE tx=?", (tx_hash,)).fetchone()
+            if not row or row[0] != payer or row[1] != route:
+                return False
+            self._db.execute("DELETE FROM used WHERE tx=?", (tx_hash,))
+            self._db.execute("INSERT OR IGNORE INTO refunded VALUES (?,?)", (tx_hash, int(time.time())))
             self._db.commit()
+            return True
 
-    def _nonce_valid(self, nonce: str, route: str) -> bool:
-        if not isinstance(nonce, str) or len(nonce) != 32:
-            return False
-        with self._lock:
-            row = self._db.execute("SELECT route, ts FROM nonce WHERE n=?", (nonce,)).fetchone()
-        return bool(row) and row[0] == route and time.time() - row[1] <= NONCE_TTL
 
-    def _consume_nonce(self, nonce: str) -> None:
-        with self._lock:
-            self._db.execute("DELETE FROM nonce WHERE n=?", (nonce,))
-            self._db.commit()
 
     def _maybe_prune(self) -> None:
         """Spent payments and stale challenges are dead weight once they can no longer be redeemed."""
@@ -282,5 +319,5 @@ class Paywall:
         cutoff = int(now) - 2 * 3600
         with self._lock:
             self._db.execute("DELETE FROM used WHERE ts < ?", (cutoff,))
-            self._db.execute("DELETE FROM nonce WHERE ts < ?", (int(now) - NONCE_TTL,))
+            self._db.execute("DELETE FROM refunded WHERE ts < ?", (cutoff,))
             self._db.commit()

@@ -38,9 +38,17 @@ class Rpc:
         self.url = url
         self.timeout = timeout
         self._id = 0
+        self._id_lock = threading.Lock()
         # urllib follows redirects by default; an RPC endpoint has no business redirecting us.
         self._opener = urllib.request.build_opener(_NoRedirect)
         self._local = threading.local()
+
+    def _next_id(self) -> int:
+        """Ids must be unique within a payload; an unlocked increment can hand two threads the same
+        one and collapse two results into one."""
+        with self._id_lock:
+            self._id += 1
+            return self._id
 
     # ------------------------------------------------------------------ deadline
 
@@ -103,8 +111,7 @@ class Rpc:
     # ------------------------------------------------------------------ calls
 
     def request(self, method: str, params: list):
-        self._id += 1
-        out = self._post({"jsonrpc": "2.0", "id": self._id, "method": method, "params": params})
+        out = self._post({"jsonrpc": "2.0", "id": self._next_id(), "method": method, "params": params})
         if not isinstance(out, dict):
             raise UpstreamError("expected a single JSON-RPC response")
         if "error" in out:
@@ -135,8 +142,7 @@ class Rpc:
             return []
         payload = []
         for method, params in reqs:
-            self._id += 1
-            payload.append({"jsonrpc": "2.0", "id": self._id, "method": method, "params": params})
+            payload.append({"jsonrpc": "2.0", "id": self._next_id(), "method": method, "params": params})
         out = self._post(payload)
         if not isinstance(out, list):
             # A node that genuinely does not implement batching: fall back once, sequentially.

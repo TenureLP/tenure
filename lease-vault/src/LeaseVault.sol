@@ -69,6 +69,7 @@ contract LeaseVault {
         uint40 pausedSince; // non-zero while a freeze of the underlying is recorded
         uint40 pausedSeenAt; // last instant the freeze was actually observed
         uint40 pausedTotal; // cumulative frozen seconds already closed
+        uint16 maxFrozenBps; // ceiling on total frozen time, as a fraction of the term
         uint8 freezeProbe; // how to ask the pair whether it is frozen, from the registry
         State state;
     }
@@ -78,6 +79,11 @@ contract LeaseVault {
     ///      stop the rent for the rest of the term. Both sides are cheaply able to keep the record
     ///      honest by calling `checkpointFreeze`; what nobody can do is let it drift one way.
     uint40 public constant MAX_FREEZE_GAP = 6 hours;
+
+    /// @notice Gas the freeze probe is allowed. Generous on purpose: the defence against a token
+    ///         answering with megabytes is the one-word copy bound, not a tight stipend, and an
+    ///         honest `paused()` behind a proxy with a few cold reads already costs 15k.
+    uint256 private constant PROBE_GAS = 100_000;
 
     // ---------------------------------------------------------------------
     // Immutables / storage
@@ -180,16 +186,17 @@ contract LeaseVault {
         return _accrued(d);
     }
 
-    /// @return 0 while the deal has not been funded, since there is no lease to end yet.
+    /// @return The far future while the deal has not been funded. Not zero: the obvious question a
+    ///         caller asks is `block.timestamp >= graceEnd(id)`, and zero answers that with yes.
     function leaseEnd(uint256 dealId) public view returns (uint40) {
         Deal storage d = _deals[dealId];
-        return d.fundedAt == 0 ? 0 : d.fundedAt + d.term;
+        return d.fundedAt == 0 ? type(uint40).max : d.fundedAt + d.term;
     }
 
-    /// @return 0 while the deal has not been funded.
+    /// @return The far future while the deal has not been funded.
     function graceEnd(uint256 dealId) public view returns (uint40) {
         Deal storage d = _deals[dealId];
-        return d.fundedAt == 0 ? 0 : d.fundedAt + d.term + d.grace;
+        return d.fundedAt == 0 ? type(uint40).max : d.fundedAt + d.term + d.grace;
     }
 
     // ---------------------------------------------------------------------
@@ -235,6 +242,7 @@ contract LeaseVault {
         d.buybackPrice = buybackPrice;
         d.listingFee = fee;
         d.feeRecipient = registry.feeRecipient();
+        d.maxFrozenBps = registry.maxFrozenBps();
         d.term = term;
         d.grace = registry.grace();
         d.listingExpiry = uint40(block.timestamp + listingDuration);
@@ -459,10 +467,20 @@ contract LeaseVault {
         return until <= d.pausedSince ? 0 : until - d.pausedSince;
     }
 
-    /// @dev Rent accrues only for usable seconds: elapsed minus recorded frozen time.
+    /// @dev Rent accrues only for usable seconds: elapsed minus recorded frozen time, and frozen
+    ///      time is capped for the whole deal.
+    ///
+    ///      The per-gap bound alone was not enough. Sampling cannot tell "frozen all week, observed
+    ///      every six hours" from "halted for one second at each of those instants", so a lessee who
+    ///      checkpoints during twenty-eight brief halts could credit an entire term. The total cap is
+    ///      what makes the financier's downside something they can price when they fund.
     function _accrued(Deal storage d) private view returns (uint128) {
         uint40 t = _clampedNow(d);
-        uint256 usable = uint256(t - d.fundedAt) - d.pausedTotal - _openFreeze(d, t);
+        uint256 frozen = uint256(d.pausedTotal) + _openFreeze(d, t);
+        uint256 ceiling = uint256(d.term) * d.maxFrozenBps / 10_000;
+        if (frozen > ceiling) frozen = ceiling;
+        uint256 elapsed = t - d.fundedAt;
+        uint256 usable = elapsed > frozen ? elapsed - frozen : 0;
         return uint128(uint256(d.rent) * usable / d.term);
     }
 
@@ -512,12 +530,16 @@ contract LeaseVault {
         assembly ("memory-safe") {
             let ptr := mload(0x40)
             mstore(ptr, 0x5c975abb00000000000000000000000000000000000000000000000000000000) // paused()
-            ok := staticcall(30000, token, ptr, 4, 0x00, 0x20)
+            ok := staticcall(PROBE_GAS, token, ptr, 4, 0x00, 0x20)
             size := returndatasize()
             word := mload(0x00)
         }
-        if (!ok) return false; // no such function: this token has no freeze switch
-        if (size != 32) return true; // answered, but not in the shape we were told to expect
+        if (!ok) return false; // reverted: no such function, so no freeze switch
+        // Succeeding with nothing to say is also "no such function": a token with a permissive
+        // fallback, or an address with no code, answers exactly like that. Reading it as frozen
+        // would stop the rent for the whole term with no way for anyone to undo it.
+        if (size == 0) return false;
+        if (size != 32) return true; // answered, but not in the shape the committee recorded
         return word == 1;
     }
 }

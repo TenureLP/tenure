@@ -86,3 +86,12 @@ contract MockReturnBombERC20 is MockERC20 {
         }
     }
 }
+
+/// @dev Answers every unknown selector successfully with no return data, the way a token with a
+///      permissive fallback does. That is indistinguishable from "no such function" and must not be
+///      read as frozen.
+contract MockSilentERC20 is MockERC20 {
+    constructor() MockERC20("Silent", "SIL", 18) {}
+
+    fallback() external {}
+}

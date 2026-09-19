@@ -146,11 +146,35 @@ class PaywallTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(reason, "payment already used")
 
-    def test_release_lets_a_failed_request_be_retried(self):
+    def test_release_lets_a_failed_request_be_retried_once_only(self):
+        pw = _paywall()
+        proof = _proof(pw, TX)
+        self.assertTrue(pw.verify(proof, ROUTE)[0])
+        self.assertTrue(pw.release(TX, proof["payer"], ROUTE))
+        self.assertTrue(pw.verify(_proof(pw, TX), ROUTE)[0])
+        # A second refund would make the payment a tap for unlimited free work.
+        self.assertFalse(pw.release(TX, proof["payer"], ROUTE))
+
+    def test_release_refuses_a_stranger_and_another_route(self):
+        pw = _paywall()
+        proof = _proof(pw, TX)
+        self.assertTrue(pw.verify(proof, ROUTE)[0])
+        self.assertFalse(pw.release(TX, "0x" + "11" * 20, ROUTE))
+        self.assertFalse(pw.release(TX, proof["payer"], "/v1/position/999"))
+
+    def test_a_trailing_newline_cannot_split_the_ledger(self):
         pw = _paywall()
         self.assertTrue(pw.verify(_proof(pw, TX), ROUTE)[0])
-        pw.release(TX)
-        self.assertTrue(pw.verify(_proof(pw, TX), ROUTE)[0])
+        ok, reason, _ = pw.verify(_proof(pw, TX + chr(10)), ROUTE)
+        self.assertFalse(ok)
+        self.assertIn("malformed", reason)
+
+    def test_a_nonce_for_another_route_is_refused(self):
+        pw = _paywall()
+        other = pw.challenge("/v1/position/999")["accepts"][0]["extra"]["nonce"]
+        ok, reason, _ = pw.verify(_proof(pw, TX, nonce=other), ROUTE)
+        self.assertFalse(ok)
+        self.assertIn("nonce", reason)
 
     def test_zero_confirmations_is_rejected(self):
         pw = _paywall(FakeRpc(head=hex(1000)))

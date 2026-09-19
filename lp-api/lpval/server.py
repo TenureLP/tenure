@@ -91,7 +91,9 @@ def _cached(key, build):
             while len(_cache) > _CACHE_MAX:
                 _cache.popitem(last=False)
         return flight.value
-    except BaseException as exc:
+    except Exception as exc:
+        # Deliberately not BaseException: a KeyboardInterrupt stored here would be re-raised in
+        # unrelated threads that never asked to be interrupted.
         flight.exc = exc
         raise
     finally:
@@ -156,16 +158,33 @@ def make_handler(rpc: Rpc, paywall: Paywall):
                 # Honest refusal beats accepting work we cannot do.
                 return self._send(503, {"error": "busy", "message": "too many requests in flight"}, {"retry-after": "2"})
             try:
+                # One budget for the whole request, payment verification included, and cleared after.
+                # A thread serves every request of a keep-alive connection, so a deadline left behind
+                # would refuse the next one before it even reached the node.
+                rpc.set_deadline(_BUILD_BUDGET)
                 self._serve(url, m, token_id)
             finally:
+                rpc.clear_deadline()
                 _slots.release()
 
         def _serve(self, url, m, token_id):
-            paid_headers, spent_hash = {}, None
+            qs = parse_qs(url.query)
+            lookback = int(_num(qs, "lookbackHours", 24.0, 0.0, 720.0))
+            terms = (
+                _num(qs, "term", 7, 1, 30, int),
+                _num(qs, "haircut", 0.20, 0.0, 0.9),
+                _num(qs, "rentShare", 0.5, 0.0, 1.0),
+            )
+            # What the payer signs has to name the work, not just the path: `lookbackHours` drives
+            # how much upstream work a request costs, so leaving it out of the signature would let
+            # one payment buy the cheapest request and then be replayed against the dearest.
+            resource = f"{url.path}?lookbackHours={lookback}"
+
+            paid_headers, spent = {}, None
             if paywall.enabled:
                 # Display only. Nothing is ever signed over the Host header, which the caller sets.
                 host = self.headers.get("Host") or ""
-                challenge = paywall.challenge(url.path, f"http://{host}" if host else "")
+                challenge = paywall.challenge(resource, f"http://{host}" if host else "")
                 required = {"PAYMENT-REQUIRED": paywall.encode(challenge), "WWW-Authenticate": "x402"}
                 try:
                     proof, err = paywall.parse_proof(self.headers)
@@ -173,41 +192,29 @@ def make_handler(rpc: Rpc, paywall: Paywall):
                         if err:
                             challenge["reason"] = err
                         return self._send(402, challenge, required)
-                    ok, reason, receipt = paywall.verify(proof, url.path)
+                    ok, reason, receipt = paywall.verify(proof, resource)
                 except Exception:
                     return self._send(402, dict(challenge, reason="the proof could not be read"), required)
                 if not ok:
                     challenge["reason"] = reason
                     return self._send(402, challenge, required)
-                spent_hash = proof["txHash"]
+                spent = (proof["txHash"], proof["payer"], resource)
                 paid_headers = {"PAYMENT-RESPONSE": paywall.encode(receipt)}
 
-            qs = parse_qs(url.query)
-            lookback = int(_num(qs, "lookbackHours", 24.0, 0.0, 720.0))
-
-            def build():
-                rpc.set_deadline(_BUILD_BUDGET)
-                return value_position(rpc, token_id, lookback_hours=lookback)
-
             try:
-                val = _cached((token_id, lookback), build)
+                val = _cached((token_id, lookback), lambda: value_position(rpc, token_id, lookback_hours=lookback))
             except PositionNotFound as exc:
                 # A token id the caller chose and that does not exist is a real answer, so the
                 # payment stands. Refunding here would let one payment buy unlimited failed work.
                 return self._send(404, {"error": "position_not_found", "detail": str(exc)})
             except Exception:
-                if spent_hash:
-                    paywall.release(spent_hash)  # our fault, so they can retry with the same proof
+                if spent:
+                    paywall.release(*spent)  # our fault, so they can retry, once, with the same proof
                 return self._send(502, {"error": "upstream_error", "message": "the chain could not be read right now"})
 
             if m.group(2):
                 val = dict(val)
-                val["quote"] = quote(
-                    val,
-                    term_days=_num(qs, "term", 7, 1, 30, int),
-                    haircut=_num(qs, "haircut", 0.20, 0.0, 0.9),
-                    rent_share=_num(qs, "rentShare", 0.5, 0.0, 1.0),
-                )
+                val["quote"] = quote(val, term_days=terms[0], haircut=terms[1], rent_share=terms[2])
             return self._send(200, val, paid_headers)
 
         def log_message(self, fmt, *args):

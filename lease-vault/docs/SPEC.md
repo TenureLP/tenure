@@ -77,9 +77,22 @@ interaction and on every `checkpointFreeze`, the vault asks each token of the pa
 paused, using the probe the registry recorded for that pool. Frozen seconds are removed from the rent
 base and refunded to the lessee at settlement. The calendar term itself does not stretch.
 
-A freeze only counts for up to `MAX_FREEZE_GAP` (6 hours) beyond the last time it was actually
-observed. Without that bound, one call during a one-second halt would stop the rent for the rest of
-the term. Both sides can keep the record honest cheaply; neither can let it drift their way.
+Two bounds sit on that, and the second one is a policy choice the committee owns.
+
+A freeze counts for at most `MAX_FREEZE_GAP` (6 hours) beyond the last time it was actually
+observed, so nobody can open one and let it run unattended.
+
+On top of that, a deal may credit at most `maxFrozenBps` of its term as frozen, 25% by default.
+Sampling cannot distinguish "frozen all week, observed every six hours" from "halted for one second
+at each of those instants", so without a total ceiling a lessee who checkpoints during repeated
+brief halts could wipe out the rent for a few dozen cheap transactions. The ceiling is what makes
+the financier's downside something they can read and price before they fund.
+
+The cost of that ceiling is real and points the other way: a pair that genuinely halts for longer
+than the ceiling makes the lessee pay rent for time the asset was unusable. For the v1 allowlist,
+crypto pairs that never halt, 25% is slack. Tokenised equities halt every night and every weekend,
+which is well past it, so allowlisting such a pair means raising `maxFrozenBps` and accepting the
+sampling exposure that comes with it, or redesigning the freeze evidence entirely.
 
 Known limit: a position destroyed by an exploit in the pool is not detectable generically on chain.
 In that case the financier owns a worthless position and the lessee owes nothing more, which is the
@@ -152,7 +165,14 @@ lease being over.
 - v4 subscribers: rejected at listing; v4 unsubscribes on transfer anyway.
 - Pausable tokens: `collectFees` fails cleanly while a token is frozen, and the rent is suspended.
 - The freeze probe runs under a fixed gas stipend and copies at most one word, so a token cannot
-  strand a deal by answering with megabytes.
+  strand a deal by answering with megabytes. A probe that reverts, or that succeeds with nothing to
+  say, means the token has no freeze switch; only a non-empty answer in the wrong shape is read as
+  frozen. The stipend is 100,000 gas, generous enough for a proxy with several cold reads, because
+  the defence against an oversized answer is the copy bound rather than a tight budget.
+- `fund` re-checks that the position is in range, which lets a third party delay a funding by moving
+  the spot tick out of the range for one block. That is a nuisance the seller can end by cancelling,
+  and the check exists to stop a financier being sandwiched into buying a position that earns
+  nothing. The trade was taken deliberately.
 - v4 permissioned pools: the `UNWIND_WITH_FALLBACK`, `SUBSCRIBE` and `UNSUBSCRIBE` actions are never
   used. A hook refusing transfers to a contract would block listing, which is the behaviour we want.
 
