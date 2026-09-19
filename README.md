@@ -15,7 +15,22 @@ A liquidity provider sells a position NFT to a financier for cash, leases it bac
 | `landing/` | Static waitlist page and its endpoint. Not deployed. |
 | `brand/` | Logo, avatar, banner and teaser, all generated from `brand/build.py`. |
 
-`LISEZMOI.md` is the same map in French, with more detail on the brand files.
+### Brand files
+
+| File | Use |
+|---|---|
+| `logo-avatar-1024.png`, `logo-avatar-400.png` | Profile picture. The drawing is pulled inside the circle a service will crop it to. |
+| `logo-mark-1024.png`, `logo-mark.svg` | Square icon, for anything not cropped to a circle. |
+| `logo-mark-small.svg` | Favicon and 32 px and below: heavier strokes, no price dot. |
+| `logo-mark-mono.svg` | One colour, no tile: stamps and watermarks. |
+| `logo-horizontal-dark.png`, `logo-horizontal-light.png` | Symbol plus name, on a dark or a light background. |
+| `logo-nav.svg` | Compact, transparent, for a site header. |
+| `banner-1500x500.png` | Social header. `banner-t1`…`t3` are the alternative text treatments; set `BRAND_BANNER` and re-export to switch. |
+| `video/tenure-intro.mp4` | A 16 second teaser, 1920×1080, silent. |
+
+Everything under `brand/` is generated. `brand/build.py` draws the SVGs with the text converted to
+outlines, so they render identically without the font installed, and `brand/export.ps1` rasterises
+them. Passing a different name to either regenerates the whole set under that name.
 
 ## Checks
 
