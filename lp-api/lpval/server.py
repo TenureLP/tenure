@@ -9,6 +9,7 @@ Routes
 """
 
 import json
+import os
 import re
 import threading
 import time
@@ -225,9 +226,44 @@ def make_handler(rpc: Rpc, paywall: Paywall):
     return Handler
 
 
-def serve(host: str = "127.0.0.1", port: int = 8402):
+def serve(host: str = None, port: int = None):
+    """Binds to 127.0.0.1 for local work, and to every interface when a platform hands us a PORT.
+
+    A container that listens on loopback is invisible to the proxy in front of it, which is the
+    single most common way a first deployment looks like it started and answers nothing.
+    """
+    env_port = os.environ.get("PORT")
+    if port is None:
+        port = int(env_port) if env_port else 8402
+    if host is None:
+        host = os.environ.get("HOST") or ("0.0.0.0" if env_port else "127.0.0.1")
+
     rpc = Rpc(RPC_URL)
     paywall = Paywall(rpc, CHAIN_ID)
+    if paywall.enabled and not _storage_is_durable():
+        raise SystemExit(
+            "The paywall is on but its ledger is not on a durable path.\n"
+            "Spent payments would be forgotten whenever the container is replaced, and every one of\n"
+            "them could then be redeemed a second time. Point LPVAL_DB at a mounted volume, or\n"
+            "unset LPVAL_PAY_TO to run free."
+        )
     httpd = ThreadingHTTPServer((host, port), make_handler(rpc, paywall))
-    print(f"lpval {__version__} on http://{host}:{port}  rpc={RPC_URL}  paywall={'on' if paywall.enabled else 'off'}")
+    print(
+        f"lpval {__version__} on http://{host}:{port}  rpc={RPC_URL}  "
+        f"paywall={'on' if paywall.enabled else 'off'}",
+        flush=True,
+    )
     httpd.serve_forever()
+
+
+def _storage_is_durable() -> bool:
+    """True when the payment ledger lives somewhere that survives a restart.
+
+    Locally any path counts. On a platform that replaces containers, it has to be under a mount the
+    operator declared, which we take to be LPVAL_DATA_DIR.
+    """
+    if not os.environ.get("PORT"):
+        return True
+    data_dir = os.environ.get("LPVAL_DATA_DIR")
+    db = os.environ.get("LPVAL_DB", "")
+    return bool(data_dir) and db.startswith(data_dir)

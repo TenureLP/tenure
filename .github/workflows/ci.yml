@@ -1,0 +1,53 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contracts:
+    name: contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: build
+        working-directory: lease-vault
+        run: forge build --sizes
+      - name: test
+        working-directory: lease-vault
+        run: forge test -vv
+        env:
+          FOUNDRY_FUZZ_RUNS: 5000
+
+  services:
+    name: services
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: lp-api tests
+        working-directory: lp-api
+        run: python -m unittest discover -s tests
+      - name: every module compiles
+        run: python -m compileall -q lp-api/lpval landing/api landing/dev_server.py landing/server.py brand/build.py
+      - name: waitlist endpoint
+        run: |
+          python - <<'PY'
+          import os, sys, tempfile
+          sys.path.insert(0, "landing")
+          os.environ["WAITLIST_FILE"] = os.path.join(tempfile.mkdtemp(), "w.jsonl")
+          from api.waitlist import process, read_length
+          assert process(b'{"email":"a@b.co"}')[0] == 200
+          assert process(b'{"email":"nope"}')[0] == 400
+          assert process(b'{')[0] == 400
+          assert process(b'{"email":"a@b.co","role":[]}')[0] == 200
+          assert read_length("-1") is None and read_length("abc") is None
+          print("ok")
+          PY
+
+# The fork tests are deliberately absent: they need a live node, and a chain outage is not a reason
+# to mark a commit broken. Run them with lease-vault/fork-test.sh before anything is deployed.

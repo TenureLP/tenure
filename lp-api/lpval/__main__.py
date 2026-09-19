@@ -67,8 +67,10 @@ def main(argv=None):
     n = sub.add_parser("snapshot", help="record fee-growth snapshots for a watchlist (run from cron)")
     n.add_argument("token_ids", type=int, nargs="+")
     s = sub.add_parser("serve")
-    s.add_argument("--host", default="127.0.0.1")
-    s.add_argument("--port", type=int, default=8402)
+    # None so the environment can decide: a container is handed its port and must bind
+    # every interface, while a local run stays on loopback.
+    s.add_argument("--host", default=None)
+    s.add_argument("--port", type=int, default=None)
     args = ap.parse_args(argv)
 
     if args.cmd == "serve":
