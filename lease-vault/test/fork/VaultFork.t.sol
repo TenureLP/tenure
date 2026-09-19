@@ -42,7 +42,9 @@ contract VaultForkTest is MiniTest {
             grace: GRACE,
             listingDuration: 1 days,
             maxFrozenBps: 2_500,
-            freezeProbe: 1
+            freezeProbe: 1,
+            builder: address(0),
+            builderFee: 0
         });
     }
 

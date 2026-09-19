@@ -29,6 +29,7 @@ contract InvariantsTest is MiniTest {
     address financier = makeAddr("financier");
     address financier2 = makeAddr("financier2");
     address keeper = makeAddr("keeper");
+    address builder = makeAddr("builder");
 
     PoolKey key;
     uint256 tokenId;
@@ -62,7 +63,7 @@ contract InvariantsTest is MiniTest {
     /// @dev The vault must always hold at least what it says it owes.
     function _assertSolvent() internal view {
         uint256 owed = vault.balances(seller) + vault.balances(financier) + vault.balances(financier2)
-            + vault.balances(keeper);
+            + vault.balances(keeper) + vault.balances(builder);
         assertGe(usdg.balanceOf(address(vault)), owed);
     }
 
@@ -102,6 +103,7 @@ contract InvariantsTest is MiniTest {
         // at the listing and the fuzz stopped exploring what it is here for; the refusal itself has
         // its own test. Zero is still reachable, so some runs exercise the rejected path too.
         uint128 buyback = uint128(_bound(rawBuyback, 0, price));
+        uint128 builderFee = uint128(_bound(uint256(rawRent) >> 8, 0, price / 100));
 
         LeaseVault.Terms memory t = LeaseVault.Terms({
             price: price,
@@ -111,7 +113,10 @@ contract InvariantsTest is MiniTest {
             grace: GRACE,
             listingDuration: 1 days,
             maxFrozenBps: 2_500,
-            freezeProbe: 1
+            freezeProbe: 1,
+            // The vault must stay solvent while paying builders out of both sides at once.
+            builder: builder,
+            builderFee: builderFee
         });
 
         vm.prank(seller);
@@ -128,6 +133,7 @@ contract InvariantsTest is MiniTest {
             _drain(seller);
             _drain(financier);
             _drain(financier2);
+            _drain(builder);
             _assertSolvent();
         } catch {
             // A rejected listing is a valid outcome; nothing should have moved.

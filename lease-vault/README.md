@@ -9,7 +9,7 @@ The point is to keep the product experience of a collateralised loan, cash now a
 asset, while the contract is a sale plus a lease plus a buyback promise rather than a pledged loan
 with a fixed surcharge. The compliance analysis is in section 6 of the spec.
 
-**Status: prototype.** It builds with solc 0.8.28. 37 unit tests pass against mocks, including a
+**Status: prototype.** It builds with solc 0.8.28. 42 unit tests pass against mocks, including a
 stateful fuzz over random action sequences, and 5 integration tests pass forked against the real
 Uniswap v4 PositionManager on Robinhood Chain. It has not been audited and the structure has not been
 reviewed by a compliance committee. Do not deploy it as it stands.
@@ -26,18 +26,20 @@ claim on the underlying share, and barred from US persons. Two consequences:
 - **On the compliance side.** A debt security tracking a share price is a receivable, not ownership.
   Making a market in one is what the analysis in the spec rules out.
 
-Both criteria point the same way. For v1 the allowlist is limited to crypto pairs judged
-permissible, WETH/USDG for instance, and later to full-rights tokenised equities once they exist on
-the chain. The screening list carries an `assetClass` and a `screeningRef` so that decision is recorded
-pair by pair.
+Both criteria point the same way. The vault itself admits any pool, because an allowlist inside an
+immutable contract is either frozen forever or governed by somebody. The judgement sits in
+`ScreeningList` instead, which the vault never reads: for now it covers crypto pairs judged
+permissible, WETH/USDG for instance, and later full-rights tokenised equities once they exist on the
+chain. It carries an `assetClass` and a `screeningRef` so the decision is recorded pair by pair, and
+whoever is funding a deal decides whether to consult it.
 
 ## How it works
 
 1. **Listing.** The liquidity provider offers their position NFT with a price, a total rent for the
    term, a buyback price and a duration. The NFT moves into the vault.
 2. **Funding.** A financier pays the price and becomes the owner of the position. The seller receives
-   the price less the prepaid rent and a flat protocol fee. The rent stays in escrow and streams to
-   the financier second by second.
+   the price less the prepaid rent. The rent stays in escrow and streams to the financier second by
+   second.
 3. **The lease.** The lessee collects the position's swap fees as often as they like. They can never
    withdraw liquidity. If the underlying token is frozen by its issuer, the rent stops accruing.
 4. **Maturity.** The lessee buys the position back at the agreed price, any time until the grace
@@ -45,7 +47,13 @@ pair by pair.
    financier takes delivery of what already belongs to them.
 
 Every payment is a balance to withdraw, never a forced transfer. The vault has no owner and no
-upgrade path.
+upgrade path, and takes no fee of its own.
+
+Each side may name a **builder** and pay them a flat amount for bringing them the deal, in the
+manner of Hyperliquid: the seller names one in the terms and pays out of their proceeds, the
+financier names one when funding and pays on top of the price. Name nobody and nothing is charged.
+Neither fee ever reaches the vault, and each is capped at a hundredth of the price so a front end
+filling that field in cannot help itself. See section 6b of the specification.
 
 ## Layout
 

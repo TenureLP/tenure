@@ -23,6 +23,8 @@ contract LeaseVaultTest is MiniTest {
     address seller = makeAddr("seller");
     address financier = makeAddr("financier");
     address financier2 = makeAddr("financier2");
+    address sellerBuilder = makeAddr("sellerBuilder");
+    address financierBuilder = makeAddr("financierBuilder");
 
     PoolKey key;
     bytes32 poolId;
@@ -80,7 +82,9 @@ contract LeaseVaultTest is MiniTest {
             grace: GRACE,
             listingDuration: 1 days,
             maxFrozenBps: 2_500,
-            freezeProbe: 1
+            freezeProbe: 1,
+            builder: address(0),
+            builderFee: 0
         });
     }
 
@@ -548,6 +552,85 @@ contract LeaseVaultTest is MiniTest {
         vault.buyBack(id);
         uint256 liabilities = vault.balances(seller) + vault.balances(financier);
         assertEq(usdg.balanceOf(address(vault)), liabilities);
+    }
+
+    // ------------------------------------------------------------------ builder codes
+
+    /// Each side pays whoever brought them, out of their own money, and the vault keeps none of it.
+    function test_fund_paysEachSideOwnBuilder() public {
+        uint128 sellerFee = PRICE / 200; // half the cap
+        uint128 financierFee = PRICE / 400;
+
+        LeaseVault.Terms memory t = _terms();
+        t.builder = sellerBuilder;
+        t.builderFee = sellerFee;
+        vm.prank(seller);
+        uint256 id = vault.list(tokenId, t);
+
+        uint256 financierBefore = usdg.balanceOf(financier);
+        vm.prank(financier);
+        vault.fund(id, financierBuilder, financierFee);
+
+        // The seller pays their own, out of the proceeds they agreed to.
+        assertEq(vault.balances(seller), PRICE - RENT - sellerFee);
+        assertEq(vault.balances(sellerBuilder), sellerFee);
+        // The financier pays theirs on top, so it never touches what the seller was promised.
+        assertEq(vault.balances(financierBuilder), financierFee);
+        assertEq(financierBefore - usdg.balanceOf(financier), uint256(PRICE) + financierFee);
+
+        // Nothing stayed behind: what came in is exactly what is owed out.
+        assertEq(
+            usdg.balanceOf(address(vault)),
+            vault.balances(seller) + vault.balances(sellerBuilder) + vault.balances(financierBuilder) + RENT
+        );
+    }
+
+    function test_fund_withNoBuilderCostsNothingExtra() public {
+        uint256 before = usdg.balanceOf(financier);
+        _listAndFund();
+        assertEq(before - usdg.balanceOf(financier), PRICE);
+        assertEq(vault.balances(seller), PRICE - RENT);
+    }
+
+    /// Naming a fee and no recipient would burn it.
+    function test_list_rejectsAFeeWithNoBuilder() public {
+        LeaseVault.Terms memory t = _terms();
+        t.builderFee = 1;
+        vm.prank(seller);
+        vm.expectRevert(LeaseVault.BadBuilderFee.selector);
+        vault.list(tokenId, t);
+    }
+
+    /// The party paying rarely builds the transaction they sign. The cap bounds what a front end
+    /// filling the field in for them can help itself to.
+    function test_builderFeeIsCappedOnBothSides() public {
+        // Read out of the way: evaluating it inside the call arguments would be the next call
+        // after expectRevert, and would swallow the expectation.
+        uint128 tooMuch = PRICE / uint128(vault.MAX_BUILDER_FEE_DIVISOR()) + 1;
+
+        LeaseVault.Terms memory t = _terms();
+        t.builder = sellerBuilder;
+        t.builderFee = tooMuch;
+        vm.prank(seller);
+        vm.expectRevert(LeaseVault.BadBuilderFee.selector);
+        vault.list(tokenId, t);
+
+        uint256 id = _list();
+        vm.prank(financier);
+        vm.expectRevert(LeaseVault.BadBuilderFee.selector);
+        vault.fund(id, financierBuilder, tooMuch);
+    }
+
+    /// A builder fee that ate the whole price would leave the seller selling for nothing.
+    function test_list_rejectsABuilderFeeThatLeavesTheSellerNothing() public {
+        LeaseVault.Terms memory t = _terms();
+        t.price = RENT + 2;
+        t.buybackPrice = RENT + 2;
+        t.builder = sellerBuilder;
+        t.builderFee = 2;
+        vm.prank(seller);
+        vm.expectRevert(LeaseVault.BadEconomics.selector);
+        vault.list(tokenId, t);
     }
 
     /// Deals do not share settings, so there is no state anyone could change to reach into one

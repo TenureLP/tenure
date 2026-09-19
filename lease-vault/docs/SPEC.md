@@ -56,6 +56,7 @@ An example, USDG having 6 decimals.
 | Sale price | 1,815 USDG |
 | Total rent, 7 days | 9 USDG |
 | Buyback price | 1,815 USDG |
+| Builder fee, if a front end brought the deal | 0 by default |
 | Received by the seller at funding | 1,806 USDG |
 
 The financier earns 9 USDG of rent if the lease runs its course, about 0.5% over 7 days, plus 1,815
@@ -115,7 +116,7 @@ expected outcome for a lease.
 | No 'inah | Sale and lease are two acts settled in order inside `fund`; the financier cannot transfer to the lessee except through `buyBack`. The `SelfDeal` check compares addresses: it stops the obvious self-funding, not a seller using a second address. No on-chain check can do better, and the committee should weigh that | OIC Fiqh Academy, res. 66; AAOIFI 9, 3/2 |
 | Buyback by unilateral promise, at a price fixed in advance and never above the sale price | `buyBack` at `buybackPrice`, exercised at the lessee's sole discretion; `list` refuses a buyback above the price, so the financier can never earn a spread on the capital | AAOIFI 2008 statement on ijarah sukuk, provided the lessor bears total loss |
 | No ghalaq ar-rahn | There is no pledge: the financier keeps nothing, they take delivery of what is theirs | Hadith "la yughlaq ar-rahn" |
-| No fee taken between the parties | The vault charges nothing. A service fee, if any, is charged by whatever is built on top, for a service actually rendered | AAOIFI 19 on qard fees, by analogy |
+| No fee taken between the parties | The vault charges nothing and pays no address of its own. Each side may name a builder and pay them a flat amount out of its own money, for bringing them the deal | AAOIFI 19 on qard fees, by analogy; ujrah for a service rendered |
 | No oracle, no liquidation | No price is read in the deal path; `StateView` only checks the range at listing and at funding | Product principle |
 | Permissible assets | Not the vault's business. A screening list carries `assetClass` and `screeningRef` per pool, and whoever funds a deal decides what to consult | AAOIFI 21 screening for equities |
 
@@ -154,6 +155,37 @@ The layer above is where the product lives, and where a fee belongs: a vault poo
 capital that funds only what its curator approves, a front end that declines to show the rest, a
 matching service. Each of those renders a service somebody can price. A toll on the primitive itself
 could never be removed once it is immutable, and would be harder to defend as a fee at cost.
+
+### Builder codes
+
+The vault carries one thing that looks like a fee and is not, borrowed from Hyperliquid: each side
+may name a **builder** and a flat amount in USDG to pay them.
+
+- The seller names theirs in the terms. It comes out of the proceeds they were already agreeing to,
+  and the vault refuses terms where rent plus that fee leaves the seller nothing.
+- The financier names theirs when funding, and pays it **on top** of the price, so it can never
+  touch what the seller was promised.
+- Name nobody and nothing is charged. This is the default and it is what `fund(dealId)` does.
+- Neither fee reaches this contract. There is no address in the vault that collects anything.
+
+`MAX_BUILDER_FEE_DIVISOR` caps each side at a hundredth of the sale price. The cap is not there to
+protect the protocol, which takes nothing either way; it is there because the party paying rarely
+builds the transaction they sign, and a front end filling that field in on their behalf should not
+be able to help itself to an unbounded share.
+
+The distinction that makes this compatible with an immutable contract: a **toll** is taken from
+everyone, goes to a fixed address and cannot be removed; a **builder fee** is chosen by the party
+paying it, goes to whoever that party names, and is zero by default. The first is governance wearing
+a different hat. The second is two people agreeing to pay their own agents.
+
+It is also the easier one to defend in section 6. It is a flat amount, not a share of principal, and
+it buys something real: the interface, the screening, the introduction. A percentage ceiling bounds
+abuse without making the fee itself a percentage of the money at stake.
+
+Not borrowed: Hyperliquid's HIP-3 deployers, who stand up a market and take a cut of everything
+traded on it. That needs the base layer to know who operates what, which is per-market governance by
+another name. The equivalent here is the curated vault one layer up, whose curator earns from their
+own depositors because they carry the risk of their own screening.
 
 ## 7. Regulatory context, as of September 2026
 

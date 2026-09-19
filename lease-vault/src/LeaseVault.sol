@@ -40,8 +40,15 @@ import {Currency, PoolId, PoolKey, PoolIdLib, PositionInfoLib, Actions} from "./
 /// the bottom layer. `ScreeningList` in this repository is one such list, and this contract does
 /// not read it.
 ///
-/// There is no protocol fee. A toll on a neutral primitive cannot be removed once it is immutable,
-/// and it is the layer above that performs a service worth charging for.
+/// There is no protocol fee, and no address anywhere that this contract pays. A toll on a neutral
+/// primitive cannot be removed once the primitive is immutable.
+///
+/// What it does carry is a builder code on each side, in the manner of Hyperliquid. Whoever brought
+/// a party to the deal can be named by that party and paid out of that party's own money: the
+/// seller names one in the terms and it comes out of their proceeds, the financier names one when
+/// funding and pays it on top of the price. Name nobody and nothing is charged. This is the
+/// difference between a fee and a toll, and it is why an immutable contract can carry the first
+/// one: nothing is taken from anybody who did not ask for it, and the vault keeps none of it.
 contract LeaseVault {
     using SafeERC20 for IERC20;
     using PoolIdLib for PoolKey;
@@ -81,6 +88,8 @@ contract LeaseVault {
         uint16 maxFrozenBps; // ceiling on total frozen time, as a fraction of the term
         uint8 freezeProbe; // how to ask the pair whether it is frozen
         State state;
+        address builder; // paid out of the seller's proceeds at funding
+        uint128 builderFee;
     }
 
     /// @notice What the seller offers. The financier accepts all of it, unchanged, by funding.
@@ -93,6 +102,8 @@ contract LeaseVault {
         uint32 listingDuration; // how long this offer stays open for funding
         uint16 maxFrozenBps; // ceiling on frozen time credited, as a fraction of the term
         uint8 freezeProbe; // 0 never asks the pair whether it is frozen, 1 calls paused()
+        address builder; // who brought the seller this deal, or the zero address for nobody
+        uint128 builderFee; // USDG out of the seller's own proceeds, never out of anyone else's
     }
 
     /// @notice Longest stretch of frozen time credited beyond the last observation.
@@ -117,6 +128,14 @@ contract LeaseVault {
     /// @notice At most half a term may ever be credited as frozen. The seller picks the figure and
     ///         benefits from a high one, so the ceiling is the financier's guarantee, not a policy.
     uint16 public constant MAX_FROZEN_BPS = 5_000;
+
+    /// @notice Most of the sale price either side can promise to whoever brought them the deal.
+    /// @dev A hundredth. The number is not a protocol fee and never reaches this contract: each
+    ///      side names its own builder and pays out of its own money, or names nobody and pays
+    ///      nothing. The cap exists because the party paying rarely builds the transaction they
+    ///      sign, and a front end that fills the field in for them should not be able to help
+    ///      itself to an unbounded share.
+    uint256 public constant MAX_BUILDER_FEE_DIVISOR = 100;
 
     // ---------------------------------------------------------------------
     // Immutables / storage
@@ -153,6 +172,8 @@ contract LeaseVault {
     );
     event Cancelled(uint256 indexed dealId);
     event Funded(uint256 indexed dealId, address indexed financier, uint40 fundedAt);
+    /// @param sellerSide true when the seller is paying their own builder, false for the financier.
+    event BuilderPaid(uint256 indexed dealId, address indexed builder, uint128 fee, bool sellerSide);
     event FeesCollected(uint256 indexed dealId, address indexed lessee);
     event RentClaimed(uint256 indexed dealId, address indexed financier, uint128 amount);
     event BoughtBack(uint256 indexed dealId, uint128 buybackPrice, uint128 rentAccrued, uint128 rentRefunded);
@@ -170,6 +191,7 @@ contract LeaseVault {
     error BadProbe();
     error BadEconomics();
     error BuybackAboveSale();
+    error BadBuilderFee();
     error HasSubscriber();
     error NoLiquidity();
     error OutOfRange();
@@ -261,6 +283,8 @@ contract LeaseVault {
         d.grace = t.grace;
         d.maxFrozenBps = t.maxFrozenBps;
         d.freezeProbe = t.freezeProbe;
+        d.builder = t.builder;
+        d.builderFee = t.builderFee;
         d.listingExpiry = uint40(block.timestamp + t.listingDuration);
         d.state = State.Listed;
 
@@ -277,15 +301,31 @@ contract LeaseVault {
         // relies on. Above it, a lease could refund most of its own rent.
         if (t.maxFrozenBps > MAX_FROZEN_BPS) revert BadFrozenCap();
         if (t.freezeProbe > 1) revert BadProbe();
+        _requireBuilder(t.builder, t.builderFee, t.price);
         // A lease with no rent, or a buyback promise worth nothing, is not the contract this vault
-        // claims to settle. Both sides must give something.
-        if (t.price == 0 || t.rent == 0 || t.buybackPrice == 0 || t.rent >= t.price) revert BadEconomics();
+        // claims to settle. Both sides must give something. The seller has to walk away with
+        // something too, once their own builder is paid.
+        if (t.price == 0 || t.rent == 0 || t.buybackPrice == 0) revert BadEconomics();
+        if (uint256(t.rent) + t.builderFee >= t.price) revert BadEconomics();
         // The financier is paid for the use of the asset, never for the passage of time. Left free,
         // a buyback above the sale price is a guaranteed spread on top of the rent, which is a
         // financing cost wearing the clothes of a sale. Nothing stops financiers from funding only
         // the listings that carry one, so the restraint has to be in the code: there is no owner
         // here to police it later.
         if (t.buybackPrice > t.price) revert BuybackAboveSale();
+    }
+
+    /// @dev A builder fee is a payment for bringing somebody a deal, not a cut of the protocol. It
+    ///      is zero unless the party paying it names a recipient, and it is bounded so that a front
+    ///      end filling in the field cannot take an unbounded share of the money it is spending on
+    ///      somebody else's behalf.
+    function _requireBuilder(address builder, uint128 fee, uint128 price) private pure {
+        if (builder == address(0)) {
+            // Paying nobody is the default. Naming a fee without a recipient would burn it.
+            if (fee != 0) revert BadBuilderFee();
+            return;
+        }
+        if (fee > price / MAX_BUILDER_FEE_DIVISOR) revert BadBuilderFee();
     }
 
     /// @dev Whether this position can be leased at all: nobody else hooked onto it, something in
@@ -332,30 +372,49 @@ contract LeaseVault {
     // ---------------------------------------------------------------------
 
     /// @notice Buy the position at the listed price and lease it back to the seller.
+    function fund(uint256 dealId) external nonReentrant {
+        _fund(dealId, address(0), 0);
+    }
+
+    /// @notice Fund, and pay whoever brought you this deal.
+    /// @param builder    Who to credit, or the zero address to pay nobody.
+    /// @param builderFee USDG paid on top of the price, out of the financier's own pocket.
+    function fund(uint256 dealId, address builder, uint128 builderFee) external nonReentrant {
+        _fund(dealId, builder, builderFee);
+    }
+
     /// @dev Two legal acts settle here in order: the sale (price paid, ownership recorded to the
     ///      financier) then the lease (rent escrowed, lease clock started).
-    function fund(uint256 dealId) external nonReentrant {
+    function _fund(uint256 dealId, address builder, uint128 builderFee) private {
         Deal storage d = _deals[dealId];
         if (d.state != State.Listed) revert NotListed();
         if (block.timestamp > d.listingExpiry) revert ListingExpired();
         if (msg.sender == d.seller) revert SelfDeal();
+        _requireBuilder(builder, builderFee, d.price);
         // Re-checked here, not only at listing: a listing stays open for days, and in that window
         // the position can drift out of range and stop earning anything to lease. It cannot harm an
         // active deal, because an active deal never reaches this line.
         _requireInRange(d.tokenId, d.poolId);
 
-        usdg.safeTransferFrom(msg.sender, address(this), d.price);
+        // The financier's own builder fee is paid on top, so it never touches what the seller was
+        // promised. Each side pays whoever brought them here, and neither pays for the other.
+        usdg.safeTransferFrom(msg.sender, address(this), uint256(d.price) + builderFee);
 
         d.financier = msg.sender;
         d.fundedAt = uint40(block.timestamp);
         d.state = State.Active;
 
-        // Sale proceeds to the seller, net of the prepaid rent. Nothing is taken in between.
-        balances[d.seller] += uint256(d.price) - d.rent;
+        // Sale proceeds to the seller, net of the prepaid rent and of the fee the seller themselves
+        // agreed to pay at listing. The vault takes nothing.
+        balances[d.seller] += uint256(d.price) - d.rent - d.builderFee;
+        if (d.builderFee != 0) balances[d.builder] += d.builderFee;
+        if (builderFee != 0) balances[builder] += builderFee;
         // The rent stays in the vault as escrow and streams to the financier.
 
         _checkpoint(d, dealId);
         emit Funded(dealId, msg.sender, d.fundedAt);
+        if (d.builderFee != 0) emit BuilderPaid(dealId, d.builder, d.builderFee, true);
+        if (builderFee != 0) emit BuilderPaid(dealId, builder, builderFee, false);
     }
 
     /// @notice Lessee collects the swap fees earned by the position. Liquidity is never touched.
