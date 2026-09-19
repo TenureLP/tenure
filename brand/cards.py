@@ -542,6 +542,66 @@ CARD11 = page(
 """,
 )
 
+
+# ---------------------------------------------------------------------- 12, the agent loop
+
+STEPS = [
+    ("1", "GET", "the agent asks", "/x402/tenure-position-valuation/v1/position/2908273/quote",
+     "No account. No API key. Nothing to sign up for."),
+    ("2", "402", "the service answers with its price", None,
+     '{ "scheme": "onchain-tx", "network": "eip155:4663", "amount": "3000", '
+     '"asset": "0x5fc5\u2026d168", "payTo": "0x10DC\u202645De" }'),
+    ("3", "TX", "the agent pays, on chain", "0.003 USDG on Robinhood Chain",
+     "Then signs the exact resource it is paying for, so a hash somebody copied is worth nothing."),
+    ("4", "200", "the answer", None,
+     '{ "suggestedSalePriceUSDG": 0.64, "suggestedBuybackPriceUSDG": 0.64, '
+     '"suggestedRentUSDG": 0.14 }'),
+]
+
+CARD12 = page(
+    "MACHINE PAYABLE",
+    """
+<h1>An agent finds it, pays for it, <b>and uses it.</b></h1>
+<div class="sub">Four exchanges, no human in any of them. This is what HTTP 402 was reserved for in
+  1997, and it took until now to have somewhere to send the money.</div>
+<div class="grow">
+  <div class="loop">
+    """
+    + "".join(
+        '<div class="step"><div class="verb %s">%s</div><div class="body">'
+        '<div class="what">%s</div>%s<div class="det mono">%s</div></div></div>'
+        % (
+            "in" if v in ("GET", "TX") else "out",
+            v,
+            what,
+            ('<div class="path mono">%s</div>' % path) if path else "",
+            det,
+        )
+        for _, v, what, path, det in STEPS
+    )
+    + """
+  </div>
+</div>
+<div class="foot">The description it reads to know all this is served by the service itself:
+  <b>/openapi.json</b></div>
+""",
+    """
+  .loop { display:flex; flex-direction:column; gap:10px }
+  .step { background:var(--panel); border:1px solid var(--line); border-radius:14px;
+          padding:15px 24px; display:flex; align-items:flex-start; gap:22px }
+  .verb { flex:none; width:74px; text-align:center; font-family:Consolas,monospace;
+          font-size:19px; font-weight:700; padding:6px 0; border-radius:8px }
+  .verb.in { color:var(--amber); background:rgba(245,184,75,.12) }
+  .verb.out { color:var(--green); background:rgba(123,224,166,.12) }
+  .step .body { flex:1; min-width:0 }
+  .what { font-size:22px; line-height:1.25 }
+  .path { font-size:17px; color:var(--amber); margin-top:5px; word-break:break-all }
+  .det { font-size:16px; color:var(--faint); margin-top:5px; line-height:1.35;
+         word-break:break-word }
+"""
+    .replace(".det { font-size:16px", ".det { font-size:16px"),
+)
+
 CARDS = [
     ("card-1-acts.html", CARD1),
     ("card-2-not-a-loan.html", CARD2),
@@ -554,6 +614,7 @@ CARDS = [
     ("card-9-first.html", CARD9),
     ("card-10-proven.html", CARD10),
     ("card-11-refuses.html", CARD11),
+    ("card-12-agent.html", CARD12),
 ]
 
 if __name__ == "__main__":
