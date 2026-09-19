@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 660" width="1000" height="660" role="img" aria-label="Tenure">
+  <defs>
+  </defs><rect x="0" y="0" width="1000" height="330" fill="#0A111D"/>
+  <defs>
+    <radialGradient id="bgS00" cx="256" cy="190" r="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1B2B48"/><stop offset="0.6" stop-color="#0E1726"/><stop offset="1" stop-color="#0A111D"/>
+    </radialGradient>
+    <linearGradient id="amS00" x1="0" y1="160" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD683"/><stop offset="0.5" stop-color="#F5B84B"/><stop offset="1" stop-color="#EFA233"/>
+    </linearGradient>
+    <linearGradient id="glS00" x1="0" y1="190" x2="0" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F5B84B" stop-opacity="0.34"/><stop offset="1" stop-color="#F5B84B" stop-opacity="0.04"/>
+    </linearGradient>
+    <clipPath id="tileS00"><rect width="512" height="512" rx="116"/></clipPath></defs>
+  <g transform="translate(40 40) scale(0.50000)">
+    <g clip-path="url(#tileS00)">
+      <rect width="512" height="512" fill="url(#bgS00)"/>
+      <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352 Z" fill="url(#glS00)"/>
+      <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352" fill="none" stroke="url(#amS00)" stroke-width="30" stroke-linecap="round"/>
+      <rect x="82" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+      <rect x="402" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+      <circle cx="310.7" cy="247.0" r="31" fill="#0E1726"/><circle cx="310.7" cy="247.0" r="19" fill="#F4F1EA"/>
+    </g><rect x="1.5" y="1.5" width="509" height="509" rx="114.5" fill="none" stroke="#F4F1EA" stroke-opacity="0.10" stroke-width="3"/></g>
+  <defs>
+    <radialGradient id="bgS01" cx="256" cy="190" r="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1B2B48"/><stop offset="0.6" stop-color="#0E1726"/><stop offset="1" stop-color="#0A111D"/>
+    </radialGradient>
+    <linearGradient id="amS01" x1="0" y1="160" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD683"/><stop offset="0.5" stop-color="#F5B84B"/><stop offset="1" stop-color="#EFA233"/>
+    </linearGradient>
+    <linearGradient id="glS01" x1="0" y1="190" x2="0" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F5B84B" stop-opacity="0.34"/><stop offset="1" stop-color="#F5B84B" stop-opacity="0.04"/>
+    </linearGradient>
+    <clipPath id="tileS01"><rect width="512" height="512" rx="116"/></clipPath></defs>
+  <g transform="translate(332 40) scale(0.25000)">
+    <g clip-path="url(#tileS01)">
+      <rect width="512" height="512" fill="url(#bgS01)"/>
+      <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352 Z" fill="url(#glS01)"/>
+      <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352" fill="none" stroke="url(#amS01)" stroke-width="30" stroke-linecap="round"/>
+      <rect x="82" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+      <rect x="402" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+      <circle cx="310.7" cy="247.0" r="31" fill="#0E1726"/><circle cx="310.7" cy="247.0" r="19" fill="#F4F1EA"/>
+    </g><rect x="1.5" y="1.5" width="509" height="509" rx="114.5" fill="none" stroke="#F4F1EA" stroke-opacity="0.10" stroke-width="3"/></g>
+  <defs>
+    <radialGradient id="bgS02" cx="256" cy="190" r="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1B2B48"/><stop offset="0.6" stop-color="#0E1726"/><stop offset="1" stop-color="#0A111D"/>
+    </radialGradient>
+    <linearGradient id="amS02" x1="0" y1="160" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD683"/><stop offset="0.5" stop-color="#F5B84B"/><stop offset="1" stop-color="#EFA233"/>
+    </linearGradient>
+    <linearGradient id="glS02" x1="0" y1="190" x2="0" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F5B84B" stop-opacity="0.34"/><stop offset="1" stop-color="#F5B84B" stop-opacity="0.04"/>
+    </linearGradient>
+    <clipPath id="tileS02"><rect width="512" height="512" rx="116"/></clipPath></defs>
+  <g transform="translate(496 40) scale(0.12500)">
+    <g clip-path="url(#tileS02)">
+      <rect width="512" height="512" fill="url(#bgS02)"/>
+      <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352 Z" fill="url(#glS02)"/>
+      <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352" fill="none" stroke="url(#amS02)" stroke-width="30" stroke-linecap="round"/>
+      <rect x="82" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+      <rect x="402" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+      <circle cx="310.7" cy="247.0" r="31" fill="#0E1726"/><circle cx="310.7" cy="247.0" r="19" fill="#F4F1EA"/>
+    </g><rect x="1.5" y="1.5" width="509" height="509" rx="114.5" fill="none" stroke="#F4F1EA" stroke-opacity="0.10" stroke-width="3"/></g>
+  <defs>
+    <radialGradient id="bgS03" cx="256" cy="190" r="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1B2B48"/><stop offset="0.6" stop-color="#0E1726"/><stop offset="1" stop-color="#0A111D"/>
+    </radialGradient>
+    <linearGradient id="amS03" x1="0" y1="160" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD683"/><stop offset="0.5" stop-color="#F5B84B"/><stop offset="1" stop-color="#EFA233"/>
+    </linearGradient>
+    <linearGradient id="glS03" x1="0" y1="190" x2="0" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F5B84B" stop-opacity="0.34"/><stop offset="1" stop-color="#F5B84B" stop-opacity="0.04"/>
+    </linearGradient>
+    <clipPath id="tileS03"><rect width="512" height="512" rx="116"/></clipPath></defs>
+  <g transform="translate(596 40) scale(0.06250)">
+    <g clip-path="url(#tileS03)">
+      <rect width="512" height="512" fill="url(#bgS03)"/>
+      
+      <path d="M147.0 338 C 201.5 338 190.6 196 256 196 S 310.5 338 365.0 338" fill="none" stroke="url(#amS03)" stroke-width="46" stroke-linecap="round"/>
+      <rect x="70" y="112" width="44" height="288" rx="22.0" fill="#F4F1EA"/>
+      <rect x="398" y="112" width="44" height="288" rx="22.0" fill="#F4F1EA"/>
+      
+    </g><rect x="1.5" y="1.5" width="509" height="509" rx="114.5" fill="none" stroke="#F4F1EA" stroke-opacity="0.10" stroke-width="3"/></g>
+  <defs>
+    <radialGradient id="bgS04" cx="256" cy="190" r="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1B2B48"/><stop offset="0.6" stop-color="#0E1726"/><stop offset="1" stop-color="#0A111D"/>
+    </radialGradient>
+    <linearGradient id="amS04" x1="0" y1="160" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD683"/><stop offset="0.5" stop-color="#F5B84B"/><stop offset="1" stop-color="#EFA233"/>
+    </linearGradient>
+    <linearGradient id="glS04" x1="0" y1="190" x2="0" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F5B84B" stop-opacity="0.34"/><stop offset="1" stop-color="#F5B84B" stop-opacity="0.04"/>
+    </linearGradient>
+    <clipPath id="tileS04"><rect width="512" height="512" rx="116"/></clipPath></defs>
+  <g transform="translate(664 40) scale(0.03125)">
+    <g clip-path="url(#tileS04)">
+      <rect width="512" height="512" fill="url(#bgS04)"/>
+      
+      <path d="M147.0 338 C 201.5 338 190.6 196 256 196 S 310.5 338 365.0 338" fill="none" stroke="url(#amS04)" stroke-width="46" stroke-linecap="round"/>
+      <rect x="70" y="112" width="44" height="288" rx="22.0" fill="#F4F1EA"/>
+      <rect x="398" y="112" width="44" height="288" rx="22.0" fill="#F4F1EA"/>
+      
+    </g><rect x="1.5" y="1.5" width="509" height="509" rx="114.5" fill="none" stroke="#F4F1EA" stroke-opacity="0.10" stroke-width="3"/></g>
+  <g transform="translate(736 40) scale(0.5)">
+    <mask id="kF4F1EA" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect width="512" height="512" fill="#fff"/><circle cx="310.7" cy="247.0" r="31" fill="#000"/>
+    </mask>
+    <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352" fill="none" stroke="#F4F1EA" stroke-width="30" stroke-linecap="round" mask="url(#kF4F1EA)"/>
+    <circle cx="310.7" cy="247.0" r="19" fill="#F4F1EA"/>
+    <rect x="82" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+    <rect x="402" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/></g>
+  <rect x="0" y="330" width="1000" height="330" fill="#F4F1EA"/>
+  <defs>
+    <radialGradient id="bgS10" cx="256" cy="190" r="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1B2B48"/><stop offset="0.6" stop-color="#0E1726"/><stop offset="1" stop-color="#0A111D"/>
+    </radialGradient>
+    <linearGradient id="amS10" x1="0" y1="160" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD683"/><stop offset="0.5" stop-color="#F5B84B"/><stop offset="1" stop-color="#EFA233"/>
+    </linearGradient>
+    <linearGradient id="glS10" x1="0" y1="190" x2="0" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F5B84B" stop-opacity="0.34"/><stop offset="1" stop-color="#F5B84B" stop-opacity="0.04"/>
+    </linearGradient>
+    <clipPath id="tileS10"><rect width="512" height="512" rx="116"/></clipPath></defs>
+  <g transform="translate(40 370) scale(0.50000)">
+    <g clip-path="url(#tileS10)">
+      <rect width="512" height="512" fill="url(#bgS10)"/>
+      <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352 Z" fill="url(#glS10)"/>
+      <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352" fill="none" stroke="url(#amS10)" stroke-width="30" stroke-linecap="round"/>
+      <rect x="82" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+      <rect x="402" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+      <circle cx="310.7" cy="247.0" r="31" fill="#0E1726"/><circle cx="310.7" cy="247.0" r="19" fill="#F4F1EA"/>
+    </g></g>
+  <defs>
+    <radialGradient id="bgS11" cx="256" cy="190" r="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1B2B48"/><stop offset="0.6" stop-color="#0E1726"/><stop offset="1" stop-color="#0A111D"/>
+    </radialGradient>
+    <linearGradient id="amS11" x1="0" y1="160" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD683"/><stop offset="0.5" stop-color="#F5B84B"/><stop offset="1" stop-color="#EFA233"/>
+    </linearGradient>
+    <linearGradient id="glS11" x1="0" y1="190" x2="0" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F5B84B" stop-opacity="0.34"/><stop offset="1" stop-color="#F5B84B" stop-opacity="0.04"/>
+    </linearGradient>
+    <clipPath id="tileS11"><rect width="512" height="512" rx="116"/></clipPath></defs>
+  <g transform="translate(332 370) scale(0.25000)">
+    <g clip-path="url(#tileS11)">
+      <rect width="512" height="512" fill="url(#bgS11)"/>
+      <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352 Z" fill="url(#glS11)"/>
+      <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352" fill="none" stroke="url(#amS11)" stroke-width="30" stroke-linecap="round"/>
+      <rect x="82" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+      <rect x="402" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+      <circle cx="310.7" cy="247.0" r="31" fill="#0E1726"/><circle cx="310.7" cy="247.0" r="19" fill="#F4F1EA"/>
+    </g></g>
+  <defs>
+    <radialGradient id="bgS12" cx="256" cy="190" r="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1B2B48"/><stop offset="0.6" stop-color="#0E1726"/><stop offset="1" stop-color="#0A111D"/>
+    </radialGradient>
+    <linearGradient id="amS12" x1="0" y1="160" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD683"/><stop offset="0.5" stop-color="#F5B84B"/><stop offset="1" stop-color="#EFA233"/>
+    </linearGradient>
+    <linearGradient id="glS12" x1="0" y1="190" x2="0" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F5B84B" stop-opacity="0.34"/><stop offset="1" stop-color="#F5B84B" stop-opacity="0.04"/>
+    </linearGradient>
+    <clipPath id="tileS12"><rect width="512" height="512" rx="116"/></clipPath></defs>
+  <g transform="translate(496 370) scale(0.12500)">
+    <g clip-path="url(#tileS12)">
+      <rect width="512" height="512" fill="url(#bgS12)"/>
+      <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352 Z" fill="url(#glS12)"/>
+      <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352" fill="none" stroke="url(#amS12)" stroke-width="30" stroke-linecap="round"/>
+      <rect x="82" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+      <rect x="402" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+      <circle cx="310.7" cy="247.0" r="31" fill="#0E1726"/><circle cx="310.7" cy="247.0" r="19" fill="#F4F1EA"/>
+    </g></g>
+  <defs>
+    <radialGradient id="bgS13" cx="256" cy="190" r="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1B2B48"/><stop offset="0.6" stop-color="#0E1726"/><stop offset="1" stop-color="#0A111D"/>
+    </radialGradient>
+    <linearGradient id="amS13" x1="0" y1="160" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD683"/><stop offset="0.5" stop-color="#F5B84B"/><stop offset="1" stop-color="#EFA233"/>
+    </linearGradient>
+    <linearGradient id="glS13" x1="0" y1="190" x2="0" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F5B84B" stop-opacity="0.34"/><stop offset="1" stop-color="#F5B84B" stop-opacity="0.04"/>
+    </linearGradient>
+    <clipPath id="tileS13"><rect width="512" height="512" rx="116"/></clipPath></defs>
+  <g transform="translate(596 370) scale(0.06250)">
+    <g clip-path="url(#tileS13)">
+      <rect width="512" height="512" fill="url(#bgS13)"/>
+      
+      <path d="M147.0 338 C 201.5 338 190.6 196 256 196 S 310.5 338 365.0 338" fill="none" stroke="url(#amS13)" stroke-width="46" stroke-linecap="round"/>
+      <rect x="70" y="112" width="44" height="288" rx="22.0" fill="#F4F1EA"/>
+      <rect x="398" y="112" width="44" height="288" rx="22.0" fill="#F4F1EA"/>
+      
+    </g></g>
+  <defs>
+    <radialGradient id="bgS14" cx="256" cy="190" r="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1B2B48"/><stop offset="0.6" stop-color="#0E1726"/><stop offset="1" stop-color="#0A111D"/>
+    </radialGradient>
+    <linearGradient id="amS14" x1="0" y1="160" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD683"/><stop offset="0.5" stop-color="#F5B84B"/><stop offset="1" stop-color="#EFA233"/>
+    </linearGradient>
+    <linearGradient id="glS14" x1="0" y1="190" x2="0" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F5B84B" stop-opacity="0.34"/><stop offset="1" stop-color="#F5B84B" stop-opacity="0.04"/>
+    </linearGradient>
+    <clipPath id="tileS14"><rect width="512" height="512" rx="116"/></clipPath></defs>
+  <g transform="translate(664 370) scale(0.03125)">
+    <g clip-path="url(#tileS14)">
+      <rect width="512" height="512" fill="url(#bgS14)"/>
+      
+      <path d="M147.0 338 C 201.5 338 190.6 196 256 196 S 310.5 338 365.0 338" fill="none" stroke="url(#amS14)" stroke-width="46" stroke-linecap="round"/>
+      <rect x="70" y="112" width="44" height="288" rx="22.0" fill="#F4F1EA"/>
+      <rect x="398" y="112" width="44" height="288" rx="22.0" fill="#F4F1EA"/>
+      
+    </g></g>
+  <g transform="translate(736 370) scale(0.5)">
+    <mask id="k0E1726" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect width="512" height="512" fill="#fff"/><circle cx="310.7" cy="247.0" r="31" fill="#000"/>
+    </mask>
+    <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352" fill="none" stroke="#0E1726" stroke-width="30" stroke-linecap="round" mask="url(#k0E1726)"/>
+    <circle cx="310.7" cy="247.0" r="19" fill="#0E1726"/>
+    <rect x="82" y="112" width="28" height="288" rx="14.0" fill="#0E1726"/>
+    <rect x="402" y="112" width="28" height="288" rx="14.0" fill="#0E1726"/></g>
+</svg>

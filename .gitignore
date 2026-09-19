@@ -1,0 +1,29 @@
+# Solidity
+out/
+cache/
+lib/
+broadcast/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Local state, never commit: payment ledger, fee snapshots, signups
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+waitlist.jsonl
+
+# Video rendering leftovers
+brand/video/frames/
+brand/video/stills/
+
+# Throwaway work from reviews and experiments
+**/tests/scratch/
+**/test/scratch/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example

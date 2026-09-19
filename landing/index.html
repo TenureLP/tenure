@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tenure · Sell it. Lease it back. Keep the fees.</title>
+  <meta name="description" content="Turn a Uniswap v4 liquidity position into cash today, without a loan. Sell it, lease it back for a fixed rent, keep collecting the fees, buy it back at a price agreed upfront.">
+  <meta name="theme-color" content="#0E1726">
+  <meta property="og:title" content="Tenure · Sell it. Lease it back. Keep the fees.">
+  <meta property="og:description" content="Sale-and-leaseback for Uniswap v4 positions. No loan. No liquidation.">
+  <meta property="og:image" content="assets/banner-1500x500.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-mark-small.svg">
+  <link rel="apple-touch-icon" href="assets/logo-mark-512.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy-lo: #0A111D; --navy: #0E1726; --navy-hi: #1B2B48; --panel: #121D31;
+      --ink: #F4F1EA; --muted: rgba(244, 241, 234, .68); --faint: rgba(244, 241, 234, .42);
+      --line: rgba(244, 241, 234, .10); --amber: #F5B84B; --amber-hi: #FFD683; --amber-lo: #EFA233;
+      --ok: #7BE0A6; --bad: #FF8B7B; --radius: 18px; --wrap: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0; background: var(--navy); color: var(--ink);
+      font: 400 17px/1.6 Barlow, "Bahnschrift", "Segoe UI", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    }
+    a { color: inherit; }
+    .wrap { width: min(var(--wrap), 100% - 40px); margin-inline: auto; }
+    h1, h2, h3 { margin: 0; line-height: 1.06; letter-spacing: -.012em; font-weight: 700; }
+    h2 { font-size: clamp(30px, 4.2vw, 44px); }
+    h3 { font-size: 21px; line-height: 1.25; letter-spacing: 0; }
+    p { margin: 0; }
+    .eyebrow { font: 600 13px/1 Barlow, sans-serif; letter-spacing: .22em; text-transform: uppercase; color: var(--amber); }
+    .lede { color: var(--muted); font-size: 19px; max-width: 60ch; }
+    section { padding: 96px 0; border-top: 1px solid var(--line); }
+    .head { display: grid; gap: 16px; margin-bottom: 48px; }
+
+    /* nav */
+    header.nav { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); background: rgba(14, 23, 38, .78); border-bottom: 1px solid var(--line); }
+    .nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; }
+    .nav img { height: 34px; width: auto; display: block; }
+    .nav nav { display: flex; align-items: center; gap: 28px; font-weight: 500; font-size: 16px; }
+    .nav nav a { text-decoration: none; color: var(--muted); }
+    .nav nav a:hover { color: var(--ink); }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; cursor: pointer;
+      background: linear-gradient(180deg, var(--amber-hi), var(--amber) 55%, var(--amber-lo)); color: #1A1204;
+      font: 700 16px/1 Barlow, sans-serif; letter-spacing: .01em; padding: 0 22px; height: 48px; border-radius: 12px;
+      text-decoration: none; white-space: nowrap; transition: transform .12s ease, filter .12s ease;
+    }
+    .btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+    .btn:disabled { filter: grayscale(.4) brightness(.8); cursor: wait; transform: none; }
+    .nav .btn { height: 40px; padding: 0 16px; font-size: 15px; color: #1A1204 !important; }
+
+    /* hero */
+    .hero { border-top: 0; padding: 72px 0 88px; position: relative; overflow: hidden;
+      background: radial-gradient(900px 520px at 78% 30%, rgba(27, 43, 72, .9), transparent 70%), linear-gradient(180deg, var(--navy-lo), var(--navy)); }
+    .hero .wrap { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; }
+    .hero h1 { font-size: clamp(42px, 5.6vw, 72px); margin: 22px 0 24px; white-space: nowrap; }
+    .hero h1 span { color: var(--amber); display: block; }
+    .hero .lede { margin-bottom: 34px; }
+    .chart { width: 100%; height: auto; display: block; }
+    .price { offset-path: path("M0 360 C 190 360 230 70 320 70 S 450 360 640 360"); offset-distance: 58%; animation: drift 9s ease-in-out infinite alternate; }
+    @keyframes drift { from { offset-distance: 41%; } to { offset-distance: 60%; } }
+
+    /* form */
+    form.wait { display: grid; gap: 12px; max-width: 520px; }
+    .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+    .field {
+      height: 48px; width: 100%; border-radius: 12px; border: 1px solid rgba(244, 241, 234, .18); background: rgba(10, 17, 29, .7);
+      color: var(--ink); font: 500 16px/1 Barlow, sans-serif; padding: 0 16px; outline: none; transition: border-color .12s, box-shadow .12s;
+    }
+    .field::placeholder { color: var(--faint); }
+    .field:focus { border-color: var(--amber); box-shadow: 0 0 0 3px rgba(245, 184, 75, .18); }
+    .roles { display: flex; flex-wrap: wrap; gap: 8px; border: 0; padding: 0; margin: 0; }
+    .roles legend { padding: 0; margin-bottom: 8px; color: var(--faint); font-size: 14px; }
+    .roles label { cursor: pointer; }
+    .roles input { position: absolute; opacity: 0; pointer-events: none; }
+    .roles span { display: inline-block; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(244, 241, 234, .16); color: var(--muted); font-weight: 500; font-size: 15px; }
+    .roles input:checked + span { border-color: var(--amber); color: var(--ink); background: rgba(245, 184, 75, .12); }
+    .roles input:focus-visible + span { box-shadow: 0 0 0 3px rgba(245, 184, 75, .25); }
+    .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+    .note { color: var(--faint); font-size: 14px; }
+    .msg { font-weight: 500; font-size: 15px; min-height: 1.5em; }
+    .msg.ok { color: var(--ok); } .msg.bad { color: var(--bad); }
+
+    /* facts */
+    .facts { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin-top: 72px; }
+    .facts div { background: var(--navy); padding: 22px 24px; }
+    .facts b { display: block; font-size: 30px; line-height: 1.1; font-weight: 700; color: var(--ink); }
+    .facts span { color: var(--muted); font-size: 15px; }
+
+    /* cards */
+    .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 30px; display: grid; gap: 14px; align-content: start; }
+    .card p, .card li { color: var(--muted); }
+    .step { font: 700 15px/1 Barlow, sans-serif; letter-spacing: .18em; color: var(--amber); }
+    ul.ticks { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 12px; }
+    ul.ticks li { padding-left: 28px; position: relative; }
+    ul.ticks li::before { content: ""; position: absolute; left: 2px; top: .55em; width: 14px; height: 3px; border-radius: 2px; background: var(--amber); }
+    .risk { border-left: 3px solid var(--amber); padding: 4px 0 4px 16px; color: var(--ink) !important; }
+
+    /* compare */
+    .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+    table { border-collapse: collapse; width: 100%; min-width: 640px; }
+    th, td { text-align: left; padding: 18px 22px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    tr:last-child td { border-bottom: 0; }
+    thead th { font: 600 13px/1 Barlow, sans-serif; letter-spacing: .18em; text-transform: uppercase; color: var(--faint); background: var(--navy-lo); }
+    thead th:last-child { color: var(--amber); }
+    tbody th { font-weight: 600; color: var(--ink); width: 24%; }
+    tbody td { color: var(--muted); }
+    tbody td:last-child { color: var(--ink); background: rgba(245, 184, 75, .05); }
+
+    /* status + faq */
+    .status { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .tag { display: inline-block; justify-self: start; font: 600 12px/1 Barlow, sans-serif; letter-spacing: .16em; text-transform: uppercase; padding: 7px 10px; border-radius: 6px; }
+    .tag.done { background: rgba(123, 224, 166, .12); color: var(--ok); }
+    .tag.todo { background: rgba(244, 241, 234, .08); color: var(--muted); }
+    details { border-bottom: 1px solid var(--line); padding: 22px 0; }
+    details:first-of-type { border-top: 1px solid var(--line); }
+    summary { cursor: pointer; font-weight: 600; font-size: 20px; list-style: none; display: flex; justify-content: space-between; gap: 24px; align-items: center; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; color: var(--amber); font-size: 28px; font-weight: 400; line-height: 1; transition: transform .15s; }
+    details[open] summary::after { transform: rotate(45deg); }
+    details p { color: var(--muted); margin-top: 14px; max-width: 72ch; }
+
+    .cta { text-align: center; background: radial-gradient(700px 320px at 50% 0%, rgba(27, 43, 72, .85), transparent 70%); }
+    .cta form.wait { margin: 36px auto 0; text-align: left; }
+    .cta .lede { margin-inline: auto; }
+    footer { border-top: 1px solid var(--line); padding: 40px 0 56px; color: var(--faint); font-size: 14px; }
+    footer .wrap { display: grid; gap: 14px; }
+    footer img { height: 28px; width: auto; opacity: .9; }
+
+    @media (max-width: 900px) {
+      section { padding: 72px 0; }
+      .hero { padding: 48px 0 64px; }
+      .hero .wrap, .grid3, .grid2, .status { grid-template-columns: 1fr; }
+      .hero .wrap { gap: 40px; }
+      .facts { grid-template-columns: repeat(2, 1fr); margin-top: 48px; }
+      .nav nav a:not(.btn) { display: none; }
+    }
+    @media (max-width: 480px) { .row { grid-template-columns: 1fr; } .btn { width: 100%; } .nav .btn { width: auto; } }
+    @media (prefers-reduced-motion: reduce) { .price { animation: none; } html { scroll-behavior: auto; } .btn { transition: none; } }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap">
+      <a href="#top" aria-label="Tenure home"><img src="assets/logo-nav.svg" alt="Tenure" width="196" height="64"></a>
+      <nav>
+        <a href="#how">How it works</a>
+        <a href="#compare">Not a loan</a>
+        <a href="#status">Status</a>
+        <a href="#faq">FAQ</a>
+        <a class="btn" href="#join">Join the waitlist</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="wrap">
+        <div>
+          <p class="eyebrow">Uniswap v4 · Robinhood Chain</p>
+          <h1>Sell it.<br>Lease it back. <span>Keep the fees.</span></h1>
+          <p class="lede">Tenure turns a liquidity position into cash today, without a loan. You sell the position, lease it back for a fixed rent, keep collecting its swap fees, and can buy it back at a price agreed upfront.</p>
+
+          <form class="wait" data-source="hero" novalidate>
+            <div class="row">
+              <input class="field" type="email" name="email" placeholder="you@domain.xyz" autocomplete="email" aria-label="Email address" required>
+              <button class="btn" type="submit">Join the waitlist</button>
+            </div>
+            <fieldset class="roles">
+              <legend>I would mostly</legend>
+              <label><input type="radio" name="role" value="lp" checked><span>Sell and lease back</span></label>
+              <label><input type="radio" name="role" value="financier"><span>Finance positions</span></label>
+              <label><input type="radio" name="role" value="both"><span>Both</span></label>
+            </fieldset>
+            <label class="hp" aria-hidden="true">Company <input type="text" name="company" tabindex="-1" autocomplete="off"></label>
+            <p class="msg" role="status" aria-live="polite"></p>
+            <p class="note">One email when access opens. Nothing else, and no token to sell you.</p>
+          </form>
+        </div>
+
+        <svg class="chart" viewBox="0 0 640 420" role="img" aria-label="A liquidity curve with the leased range highlighted between two tick bounds">
+          <defs>
+            <linearGradient id="lit" x1="0" y1="70" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#F5B84B" stop-opacity=".46"/><stop offset="1" stop-color="#F5B84B" stop-opacity=".02"/>
+            </linearGradient>
+            <clipPath id="rng"><rect x="212" y="0" width="216" height="420"/></clipPath>
+          </defs>
+          <g fill="#F4F1EA" opacity=".14">
+            <rect x="0" y="360" width="640" height="2"/>
+            <g id="tk"><rect x="20" y="348" width="2" height="12"/><rect x="50" y="348" width="2" height="12"/><rect x="80" y="348" width="2" height="12"/><rect x="110" y="348" width="2" height="12"/><rect x="140" y="348" width="2" height="12"/><rect x="170" y="348" width="2" height="12"/></g>
+            <use href="#tk" x="180"/><use href="#tk" x="360"/><rect x="560" y="348" width="2" height="12"/><rect x="590" y="348" width="2" height="12"/><rect x="620" y="348" width="2" height="12"/>
+          </g>
+          <path d="M0 360 C 190 360 230 70 320 70 S 450 360 640 360 Z" fill="#F4F1EA" opacity=".05"/>
+          <path d="M0 360 C 190 360 230 70 320 70 S 450 360 640 360 Z" fill="url(#lit)" clip-path="url(#rng)"/>
+          <path d="M0 360 C 190 360 230 70 320 70 S 450 360 640 360" fill="none" stroke="#F4F1EA" stroke-width="2.5" opacity=".28"/>
+          <path d="M0 360 C 190 360 230 70 320 70 S 450 360 640 360" fill="none" stroke="#F5B84B" stroke-width="5" stroke-linecap="round" clip-path="url(#rng)"/>
+          <rect x="200" y="40" width="12" height="324" rx="6" fill="#F4F1EA"/>
+          <rect x="428" y="40" width="12" height="324" rx="6" fill="#F4F1EA"/>
+          <g class="price"><circle r="17" fill="#0E1726"/><circle r="10" fill="#F4F1EA"/></g>
+          <g font-family="Barlow, sans-serif" font-weight="600" font-size="12" letter-spacing="2.4" fill="#F4F1EA" opacity=".5" text-anchor="middle">
+            <text x="206" y="24">TICK LOWER</text><text x="434" y="24">TICK UPPER</text>
+          </g>
+          <g font-family="Barlow, sans-serif" font-weight="600" font-size="12" letter-spacing="2.4" text-anchor="middle">
+            <text x="320" y="398" fill="#F5B84B">YOUR POSITION, STILL EARNING</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="wrap">
+        <div class="facts">
+          <div><b>0</b><span>price oracles in the deal path</span></div>
+          <div><b>0</b><span>liquidations, by construction</span></div>
+          <div><b>Flat</b><span>protocol fee, never a percentage</span></div>
+          <div><b>34</b><span>tests passing, 5 on live forked state</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="how">
+      <div class="wrap">
+        <div class="head">
+          <p class="eyebrow">How it works</p>
+          <h2>Three acts, one transaction each.</h2>
+          <p class="lede">No debt is created at any point. There is a sale, a lease, and an option for you to buy back.</p>
+        </div>
+        <div class="grid3">
+          <article class="card">
+            <p class="step">01 · SELL</p>
+            <h3>A financier buys your position.</h3>
+            <p>You list your position NFT with a sale price, a rent and a buyback price. A financier pays the price in USDG. Ownership really transfers: they can resell it, and they carry its risk.</p>
+          </article>
+          <article class="card">
+            <p class="step">02 · LEASE</p>
+            <h3>You keep working it.</h3>
+            <p>The position is leased back to you for 7 or 21 days. You collect the swap fees it earns, as often as you like. The rent is a fixed amount that streams to the owner by the second. Nobody can pull the liquidity.</p>
+          </article>
+          <article class="card">
+            <p class="step">03 · BUY BACK, OR DON'T</p>
+            <h3>Your call at the end.</h3>
+            <p>Pay the buyback price any time before the grace window closes and the position is yours again, with unused rent refunded. If you pass, the financier keeps what they already own. You owe nothing.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="sides">
+      <div class="wrap">
+        <div class="head">
+          <p class="eyebrow">Two sides</p>
+          <h2>Who it is for.</h2>
+        </div>
+        <div class="grid2">
+          <article class="card">
+            <h3>Liquidity providers</h3>
+            <ul class="ticks">
+              <li>Cash today without unwinding the position or leaving the pool.</li>
+              <li>You keep the fee income for the whole lease.</li>
+              <li>One known cost: a rent in USDG that you set when listing.</li>
+              <li>No margin calls, no forced sale, no debt if you walk away.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Financiers</h3>
+            <ul class="ticks">
+              <li>You own a real, productive on-chain asset, not an IOU.</li>
+              <li>Fixed rent, prepaid into escrow and streamed per second.</li>
+              <li>Your ownership is transferable at any time during the lease.</li>
+              <li>Rent pauses while an issuer freezes the underlying token.</li>
+            </ul>
+            <p class="risk">You carry the asset risk. If the position loses value and the seller does not buy back, that loss is yours. That risk is what the rent pays for.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="compare">
+      <div class="wrap">
+        <div class="head">
+          <p class="eyebrow">Not a loan</p>
+          <h2>Same cash today. A different contract.</h2>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th></th><th>Collateralized loan</th><th>Tenure</th></tr></thead>
+            <tbody>
+              <tr><th>What happens</th><td>You pledge the position and borrow against it.</td><td>You sell the position and lease it back.</td></tr>
+              <tr><th>What you pay</th><td>Interest on the amount borrowed, often variable.</td><td>A fixed rent for using the position. Unused rent is refunded.</td></tr>
+              <tr><th>If the price drops</th><td>An oracle triggers a liquidation, at the worst moment.</td><td>Nothing happens. No oracle reads a price during a deal.</td></tr>
+              <tr><th>At the end</th><td>Repay or lose the collateral, surplus included.</td><td>Buy back at the agreed price, or walk away debt free.</td></tr>
+              <tr><th>Who owns it meanwhile</th><td>You do, encumbered by a lien.</td><td>The financier does, for real, and carries its risk.</td></tr>
+              <tr><th>Protocol fee</th><td>A percentage of the amount.</td><td>A flat amount per deal.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="status">
+      <div class="wrap">
+        <div class="head">
+          <p class="eyebrow">Status</p>
+          <h2>Where we actually are.</h2>
+          <p class="lede">Early, and we would rather say so. This is what exists today and what does not.</p>
+        </div>
+        <div class="status">
+          <article class="card"><span class="tag done">Done</span><h3>Contracts</h3><p>An ownerless vault and an asset registry. 29 unit tests, plus 5 integration tests run against live Uniswap v4 state on Robinhood Chain.</p></article>
+          <article class="card"><span class="tag done">Done</span><h3>Valuation API</h3><p>Prices any v4 position on the chain with exact integer math: amounts, uncollected fees, fee rate, indicative deal terms.</p></article>
+          <article class="card"><span class="tag todo">Not yet</span><h3>Audit and mainnet</h3><p>Not audited. Not deployed. No token. The waitlist opens the testnet first, mainnet only after an independent audit is published.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="wrap">
+        <div class="head"><p class="eyebrow">FAQ</p><h2>Straight answers.</h2></div>
+        <details><summary>Is this a loan under another name?</summary><p>No. There is a sale, then a lease, then a one-sided promise by the new owner to sell back at a price fixed in advance. No debt exists at any point: if you never buy back, you owe nothing and nothing is seized, because the position already belongs to the financier.</p></details>
+        <details><summary>Which positions are eligible?</summary><p>At launch, Uniswap v4 positions on Robinhood Chain in allowlisted pools, in range when listed, with no subscriber attached. Pools are reviewed one by one, and the reference of each review is recorded on-chain.</p></details>
+        <details><summary>What about tokenized stocks?</summary><p>The Stock Tokens live on Robinhood Chain today are debt securities that track a share price. They are not shares. Tenure will only allowlist tokenized equities that carry full shareholder rights, as they become available.</p></details>
+        <details><summary>What does the protocol charge?</summary><p>A flat fee per deal, in USDG, capped in the contract and fixed for your deal at the moment you list. Never a percentage of the amount.</p></details>
+        <details><summary>What if the underlying token gets frozen?</summary><p>Rent stops accruing for as long as the freeze lasts, and the rent for that time goes back to the lessee at settlement. The owner of an asset carries the risk that it becomes unusable.</p></details>
+        <details><summary>Is it audited?</summary><p>Not yet. Do not put funds you cannot afford to lose into unaudited contracts, ours included. The audit report will be public before any mainnet deployment.</p></details>
+      </div>
+    </section>
+
+    <section id="join" class="cta">
+      <div class="wrap">
+        <p class="eyebrow">Waitlist</p>
+        <h2 style="margin:18px 0 16px">Be first on the testnet.</h2>
+        <p class="lede">Tell us which side you are on. We will write once, when there is something to try.</p>
+        <form class="wait" data-source="footer" novalidate>
+          <div class="row">
+            <input class="field" type="email" name="email" placeholder="you@domain.xyz" autocomplete="email" aria-label="Email address" required>
+            <button class="btn" type="submit">Join the waitlist</button>
+          </div>
+          <fieldset class="roles">
+            <legend>I would mostly</legend>
+            <label><input type="radio" name="role" value="lp" checked><span>Sell and lease back</span></label>
+            <label><input type="radio" name="role" value="financier"><span>Finance positions</span></label>
+            <label><input type="radio" name="role" value="both"><span>Both</span></label>
+          </fieldset>
+          <label class="hp" aria-hidden="true">Company <input type="text" name="company" tabindex="-1" autocomplete="off"></label>
+          <p class="msg" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <img src="assets/logo-nav.svg" alt="Tenure" width="196" height="64">
+      <p>Tenure is a working name for software under development. Nothing on this page is an offer, a solicitation, or financial advice. Not available where prohibited. Not affiliated with Uniswap Labs or Robinhood.</p>
+      <p>Your email is used for one purpose: telling you when access opens. Ask and it is deleted.</p>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+      document.querySelectorAll("form.wait").forEach(function (form) {
+        var msg = form.querySelector(".msg"), btn = form.querySelector("button");
+        function say(text, kind) { msg.textContent = text; msg.className = "msg " + (kind || ""); }
+        form.addEventListener("submit", function (e) {
+          e.preventDefault();
+          var data = new FormData(form), email = String(data.get("email") || "").trim();
+          if (!EMAIL.test(email)) { say("That email does not look right.", "bad"); form.email.focus(); return; }
+          btn.disabled = true; say("Adding you…");
+          fetch("/api/waitlist", {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email: email, role: data.get("role"), company: data.get("company"), source: form.dataset.source })
+          }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            .then(function (res) {
+              if (!res.ok) throw new Error(res.j && res.j.message || "Something went wrong.");
+              say(res.j.duplicate ? "You were already on the list. See you at testnet." : "You are on the list. See you at testnet.", "ok");
+              form.reset();
+            })
+            .catch(function (err) { say(err.message || "Network error. Try again in a moment.", "bad"); })
+            .finally(function () { btn.disabled = false; });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

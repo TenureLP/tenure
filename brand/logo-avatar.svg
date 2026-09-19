@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Tenure">
+  <defs>
+    <radialGradient id="bgA" cx="256" cy="190" r="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1B2B48"/><stop offset="0.6" stop-color="#0E1726"/><stop offset="1" stop-color="#0A111D"/>
+    </radialGradient>
+    <linearGradient id="amA" x1="0" y1="160" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD683"/><stop offset="0.5" stop-color="#F5B84B"/><stop offset="1" stop-color="#EFA233"/>
+    </linearGradient>
+    <linearGradient id="glA" x1="0" y1="190" x2="0" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F5B84B" stop-opacity="0.34"/><stop offset="1" stop-color="#F5B84B" stop-opacity="0.04"/>
+    </linearGradient>
+    <clipPath id="tileA"><rect width="512" height="512" rx="116"/></clipPath>
+  </defs>
+    <g clip-path="url(#tileA)">
+      <rect width="512" height="512" fill="url(#bgA)"/>
+      <g transform="translate(256 256) scale(0.84) translate(-256 -256)"><path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352 Z" fill="url(#glA)"/>
+      <path d="M139.0 352 C 197.5 352 185.8 190 256 190 S 314.5 352 373.0 352" fill="none" stroke="url(#amA)" stroke-width="30" stroke-linecap="round"/>
+      <rect x="82" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+      <rect x="402" y="112" width="28" height="288" rx="14.0" fill="#F4F1EA"/>
+      <circle cx="310.7" cy="247.0" r="31" fill="#0E1726"/><circle cx="310.7" cy="247.0" r="19" fill="#F4F1EA"/></g>
+    </g>
+</svg>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>X profile preview</title>
+<!--
+  Reproduces how X lays out a profile, to check the header against the avatar.
+  Measurements taken from a real @tenureLP screenshot, normalised to a 1500-wide header:
+    avatar diameter 342, centre (222, 500) — i.e. its centre sits on the header's bottom edge
+    header is shown around 3.2:1 instead of 3:1, so roughly 25 px of the top and bottom are lost
+  Red guides mark the keep-out circle and the croppable bands. ?guides=0 hides them.
+-->
+<style>
+  * { box-sizing: border-box; margin: 0 }
+  body { width: 1500px; background: #000; color: #E7E9EA; font: 400 16px/1.4 Barlow, "Segoe UI", sans-serif; }
+  .header { position: relative; width: 1500px; height: 500px; overflow: hidden; }
+  .header img { width: 1500px; height: 500px; display: block; }
+  .crop { position: absolute; left: 0; width: 1500px; height: 25px; background: rgba(255,0,0,.22); border-block: 1px dashed #ff5a5a; }
+  .crop.t { top: 0 } .crop.b { bottom: 0 }
+  .avatar { position: absolute; left: 51px; top: 329px; width: 342px; height: 342px; border-radius: 50%; border: 10px solid #000; overflow: hidden; }
+  .avatar img { width: 100%; height: 100%; display: block; }
+  .keepout { position: absolute; left: 12px; top: 290px; width: 420px; height: 420px; border-radius: 50%; border: 2px dashed #ff5a5a; }
+  .below { position: relative; height: 260px; padding: 28px 48px; }
+  .name { margin-left: 0; font-size: 34px; font-weight: 700; }
+  .at { color: #71767B; font-size: 22px; margin-top: 2px }
+  .bio { margin-top: 18px; font-size: 21px; max-width: 900px }
+  .spacer { height: 200px }
+</style>
+</head>
+<body>
+  <div class="header">
+    <img src="banner-1500x500.png" alt="">
+    <div class="crop t"></div>
+    <div class="crop b"></div>
+  </div>
+  <div class="avatar"><img src="logo-avatar-1024.png" alt=""></div>
+  <div class="keepout"></div>
+  <div class="below">
+    <div class="spacer"></div>
+    <div class="name">Tenure</div>
+    <div class="at">@tenureLP</div>
+    <div class="bio">Sell your Uniswap v4 position, lease it back, keep the fees. No loan. No liquidation. No oracle.</div>
+  </div>
+  <script>
+    if (new URLSearchParams(location.search).get("guides") === "0")
+      document.querySelectorAll(".crop,.keepout").forEach(function (n) { n.remove(); });
+  </script>
+</body>
+</html>
