@@ -78,8 +78,12 @@ def _paywall(rpc=None, **env):
     return Paywall(rpc or FakeRpc(), CHAIN)
 
 
+def _nonce(pw, route=ROUTE):
+    return pw.challenge(route)["accepts"][0]["extra"]["nonce"]
+
+
 def _proof(pw, tx_hash, priv=KEY, route=ROUTE, nonce=None):
-    nonce = nonce or pw.challenge(route)["nonce"]
+    nonce = nonce or _nonce(pw, route)
     msg = payment_message(tx_hash, route, nonce, CHAIN, PAY_TO)
     return {
         "scheme": "onchain-tx",
@@ -229,6 +233,49 @@ class WaitlistTest(unittest.TestCase):
         cleaned = self.waitlist._safe("x`[click](https://evil.tld)`y@z.co")
         for ch in "`[]()":
             self.assertNotIn(ch, cleaned)
+
+
+class EnvelopeTest(unittest.TestCase):
+    """The 402 body follows x402 version 2, so a standard client understands the shape even though
+    our policy inside it is stricter than the usual confirmed-transaction proof."""
+
+    def test_shape(self):
+        pw = _paywall()
+        env = pw.challenge(ROUTE, "https://api.example")
+        self.assertEqual(env["x402Version"], 2)
+        accept = env["accepts"][0]
+        self.assertEqual(accept["network"], f"eip155:{CHAIN}")
+        self.assertEqual(accept["payTo"], PAY_TO)
+        self.assertEqual(accept["asset"], "0x" + "0" * 40)
+        self.assertEqual(accept["amount"], "1000000000000")
+        self.assertEqual(env["resource"]["url"], "https://api.example" + ROUTE)
+        self.assertEqual(env["resource"]["path"], ROUTE)
+
+    def test_signature_requirement_is_advertised(self):
+        pw = _paywall()
+        extra = pw.challenge(ROUTE)["accepts"][0]["extra"]
+        self.assertIn("payer-signature", extra["proof"])
+        self.assertEqual(len(extra["nonce"]), 32)
+        self.assertIn("nonce: " + extra["nonce"], extra["signThis"])
+
+    def test_the_host_header_is_never_signed(self):
+        pw = _paywall()
+        env = pw.challenge(ROUTE, "https://attacker.example")
+        self.assertNotIn("attacker.example", env["accepts"][0]["extra"]["signThis"])
+
+    def test_every_header_spelling_is_accepted(self):
+        body = json.dumps({"scheme": "onchain-tx", "txHash": TX, "payer": PAY_TO, "nonce": "a" * 32,
+                           "signature": "0x" + "11" * 65})
+        packed = base64.b64encode(body.encode()).decode()
+        for headers in (
+            {"PAYMENT-SIGNATURE": packed},
+            {"X402-PAYMENT": packed},
+            {"Authorization": "x402 " + packed},
+            {"PAYMENT-SIGNATURE": body},  # raw JSON, as some clients send
+        ):
+            proof, err = Paywall.parse_proof(headers)
+            self.assertIsNone(err, headers)
+            self.assertEqual(proof["txHash"], TX)
 
 
 if __name__ == "__main__":

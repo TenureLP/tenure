@@ -92,7 +92,9 @@ def make_handler(rpc: Rpc, paywall: Paywall):
                 self.send_header("content-type", "application/json")
                 self.send_header("content-length", str(len(raw)))
                 self.send_header("access-control-allow-origin", "*")
-                self.send_header("access-control-expose-headers", "PAYMENT-REQUIRED, PAYMENT-RESPONSE")
+                self.send_header(
+                    "access-control-expose-headers", "PAYMENT-REQUIRED, PAYMENT-RESPONSE, WWW-Authenticate"
+                )
                 for k, v in (extra_headers or {}).items():
                     self.send_header(k, v)
                 self.end_headers()
@@ -105,8 +107,12 @@ def make_handler(rpc: Rpc, paywall: Paywall):
             self.send_response(204)
             self.send_header("access-control-allow-origin", "*")
             self.send_header("access-control-allow-methods", "GET, OPTIONS")
-            self.send_header("access-control-allow-headers", "payment-signature, x-payment-tx, content-type")
-            self.send_header("access-control-expose-headers", "PAYMENT-REQUIRED, PAYMENT-RESPONSE")
+            self.send_header(
+                "access-control-allow-headers", "payment-signature, x402-payment, authorization, content-type"
+            )
+            self.send_header(
+                "access-control-expose-headers", "PAYMENT-REQUIRED, PAYMENT-RESPONSE, WWW-Authenticate"
+            )
             self.send_header("access-control-max-age", "86400")
             self.send_header("content-length", "0")
             self.end_headers()
@@ -134,8 +140,10 @@ def make_handler(rpc: Rpc, paywall: Paywall):
         def _serve(self, url, m, token_id):
             paid_headers, spent_hash = {}, None
             if paywall.enabled:
-                challenge = paywall.challenge(url.path)
-                required = {"PAYMENT-REQUIRED": paywall.encode(challenge)}
+                # Display only. Nothing is ever signed over the Host header, which the caller sets.
+                host = self.headers.get("Host") or ""
+                challenge = paywall.challenge(url.path, f"http://{host}" if host else "")
+                required = {"PAYMENT-REQUIRED": paywall.encode(challenge), "WWW-Authenticate": "x402"}
                 try:
                     proof, err = paywall.parse_proof(self.headers)
                     if err or proof is None:

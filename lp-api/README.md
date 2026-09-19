@@ -57,19 +57,26 @@ Desactive par defaut. Pour l'activer :
 LPVAL_PAY_TO=0xTonAdresse LPVAL_PRICE_WEI=1000000000000 ./run.sh serve
 ```
 
-Sans preuve, les routes payantes repondent 402 avec l'adresse, le montant, le nombre de
-confirmations exige et un **nonce** a usage unique. Le client envoie l'ETH, signe le texte fourni
-dans la reponse avec le compte qui a payé, puis rappelle :
+Sans preuve, les routes payantes repondent 402 avec une enveloppe **x402 version 2** : un tableau
+`accepts` portant le reseau en notation CAIP-2, le montant, l'actif, l'adresse de paiement et un
+delai. La meme enveloppe est renvoyee en base64 dans l'en-tete `PAYMENT-REQUIRED`. N'importe quel
+client construit pour le standard comprend donc la forme.
+
+La politique a l'interieur est plus stricte que le `confirmed-transaction` habituel, et c'est
+annonce dans `accepts[0].extra` : il faut aussi la signature du payeur. Le client envoie l'ETH,
+signe le texte `signThis` avec le compte qui a paye, puis rappelle avec la preuve dans
+`PAYMENT-SIGNATURE`, `X402-PAYMENT` ou `Authorization: x402 ...`, en JSON brut ou en base64 :
 
 ```
-PAYMENT-SIGNATURE: base64({"scheme":"onchain-tx","txHash":"0x..","payer":"0x..","nonce":"..","signature":"0x.."})
+{"scheme":"onchain-tx","txHash":"0x..","payer":"0x..","nonce":"..","signature":"0x.."}
 ```
 
 La signature est indispensable, et c'est le point important. Un hash de transaction est public des
 qu'il est mine : si le hash seul suffisait, n'importe qui surveillant la chaine pourrait depenser le
 paiement d'un client avant lui, et tout virement arrivant par hasard sur l'adresse deviendrait une
-requete gratuite. Le serveur ne compte un paiement que si le signataire recupere est bien le compte
-qui a envoye les fonds, si le nonce vient de lui, et si la transaction a assez de confirmations.
+requete gratuite. Un client qui ignore `extra` echoue, ce qui est voulu.
+
+Le texte signe porte sur le chemin de la route, jamais sur l'en-tete `Host`, que l'appelant controle.
 
 Verifie avant d'accepter : destinataire, expediteur, montant, succes, profondeur (3 blocs par
 defaut), anciennete (une heure au plus), nonce valide pour cette route, et hash jamais depense. Si

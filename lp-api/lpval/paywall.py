@@ -32,6 +32,7 @@ MAX_AGE_BLOCKS = 36_000  # about one hour of 100 ms blocks
 NONCE_TTL = 900  # seconds a challenge stays redeemable
 HASH_RE = re.compile(r"^0x[0-9a-f]{64}$")
 ADDR_RE = re.compile(r"^0x[0-9a-f]{40}$")
+NATIVE_ASSET = "0x" + "0" * 40  # how x402 names a chain's own coin rather than a token
 
 
 def payment_message(tx_hash: str, resource: str, nonce: str, chain_id: int, pay_to: str) -> str:
@@ -68,30 +69,52 @@ class Paywall:
 
     # ------------------------------------------------------------------ challenge
 
-    def challenge(self, route: str) -> dict:
+    def challenge(self, route: str, base_url: str = "") -> dict:
+        """An x402 version 2 envelope, so any client built for the standard understands the shape.
+
+        The policy inside it is stricter than the usual `confirmed-transaction` proof: we also want
+        the payer's signature, because a transaction hash is public the moment it is mined and would
+        otherwise be a bearer token. A client that ignores `extra` fails closed, which is the point.
+        """
         nonce = secrets.token_hex(16)
         with self._lock:
             self._db.execute("INSERT OR REPLACE INTO nonce VALUES (?,?,?)", (nonce, route, int(time.time())))
             self._db.commit()
         self._maybe_prune()
         return {
-            "error": "payment_required",
-            "scheme": "onchain-tx",
-            "chainId": self.chain_id,
-            "caip2": f"eip155:{self.chain_id}",
-            "asset": "ETH",
-            "payTo": self.pay_to,
-            "amountWei": str(self.price_wei),
-            "resource": route,
-            "nonce": nonce,
-            "minConfirmations": MIN_CONFIRMATIONS,
-            "expiresInSeconds": NONCE_TTL,
-            "signThis": payment_message("<txHash>", route, nonce, self.chain_id, self.pay_to),
+            "x402Version": 2,
+            "error": "Payment required",
+            "accepts": [
+                {
+                    "scheme": "onchain-tx",
+                    "network": f"eip155:{self.chain_id}",
+                    "amount": str(self.price_wei),
+                    "asset": NATIVE_ASSET,
+                    "payTo": self.pay_to,
+                    "maxTimeoutSeconds": NONCE_TTL,
+                    "extra": {
+                        "name": "ETH",
+                        "version": "1",
+                        "proof": "confirmed-transaction+payer-signature",
+                        "minConfirmations": MIN_CONFIRMATIONS,
+                        "nonce": nonce,
+                        # Signed over the path, never over the Host header, which a client controls.
+                        "signThis": payment_message("<txHash>", route, nonce, self.chain_id, self.pay_to),
+                    },
+                }
+            ],
+            "resource": {
+                "url": f"{base_url}{route}" if base_url else route,
+                "path": route,
+                "mimeType": "application/json",
+                "description": f"Paid request costing {self.price_wei} wei on chain {self.chain_id}",
+            },
             "instructions": (
-                "Send amountWei of ETH to payTo, sign the signThis text with the sending account "
-                "(personal_sign, with <txHash> replaced by the real hash), then retry with header "
-                "PAYMENT-SIGNATURE: base64 of "
-                '{"scheme":"onchain-tx","txHash":"0x..","payer":"0x..","nonce":"..","signature":"0x.."}'
+                "Send amount wei of ETH to payTo, sign the accepts[0].extra.signThis text with the "
+                "sending account (personal_sign, with <txHash> replaced by the real hash), then retry "
+                "with PAYMENT-SIGNATURE (or X402-PAYMENT, or Authorization: x402 ...) carrying "
+                '{"scheme":"onchain-tx","txHash":"0x..","payer":"0x..","nonce":"..","signature":"0x.."} '
+                "as raw JSON or base64."
             ),
         }
 
@@ -99,15 +122,26 @@ class Paywall:
 
     @staticmethod
     def parse_proof(headers):
-        """Returns (proof, error). `proof` is a dict of strings, never anything else."""
-        sig = headers.get("PAYMENT-SIGNATURE")
+        """Returns (proof, error). `proof` is a dict of strings, never anything else.
+
+        Three header spellings are accepted because three are in use in the wild, and the payload
+        may be raw JSON or base64. Being liberal about the envelope costs nothing; the strictness
+        that matters is in what the fields have to prove.
+        """
+        sig = headers.get("PAYMENT-SIGNATURE") or headers.get("X402-PAYMENT")
+        if not sig:
+            auth = headers.get("Authorization") or ""
+            if auth.lower().startswith("x402 "):
+                sig = auth[5:].strip()
         if not sig:
             return None, None
         try:
-            raw = base64.b64decode(sig + "=" * (-len(sig) % 4), validate=False)
-            proof = json.loads(raw)
+            if sig.lstrip().startswith("{"):
+                proof = json.loads(sig)
+            else:
+                proof = json.loads(base64.b64decode(sig + "=" * (-len(sig) % 4), validate=False))
         except Exception:
-            return None, "PAYMENT-SIGNATURE is not base64-encoded JSON"
+            return None, "the payment proof is neither JSON nor base64-encoded JSON"
         if not isinstance(proof, dict):
             return None, "the proof must be a JSON object"
         if proof.get("scheme") != "onchain-tx":

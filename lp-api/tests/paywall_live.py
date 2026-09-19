@@ -75,11 +75,14 @@ def proof(**kw):
 try:
     path = f"/v1/position/{TOKEN}"
     s, h, b = get(path)
-    check("no proof -> 402 carrying a fresh nonce", s == 402 and "PAYMENT-REQUIRED" in h and len(b.get("nonce", "")) == 32)
-    nonce = b["nonce"]
+    extra = (b.get("accepts") or [{}])[0].get("extra", {})
+    check("no proof -> 402 x402 v2 with a fresh nonce",
+          s == 402 and "PAYMENT-REQUIRED" in h and b.get("x402Version") == 2 and len(extra.get("nonce", "")) == 32)
+    check("the challenge advertises that a signature is required", "payer-signature" in extra.get("proof", ""))
+    nonce = extra.get("nonce", "0" * 32)
 
-    s, h, b = get(path, {"X-Payment-Tx": tx["hash"]})
-    check("the bare hash no longer buys anything", s == 402, b.get("reason") or "challenged again")
+    s, h, b = get(path, {"X402-PAYMENT": proof(txHash=tx["hash"], payer=tx["from"], nonce=nonce, signature="")})
+    check("a proof with an empty signature is refused", s == 402, b.get("reason"))
 
     s, h, b = get(path, {"PAYMENT-SIGNATURE": proof(txHash=tx["hash"], payer=tx["from"], nonce=nonce, signature="0x" + "11" * 65)})
     check("a forged signature is refused", s == 402, b.get("reason"))
