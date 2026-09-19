@@ -1,8 +1,12 @@
 """Local preview: serves the static page and the waitlist endpoint. Standard library only.
 
-    python dev_server.py [port]        default 8410, signups land in waitlist.jsonl next to this file
+    python dev_server.py [port]        default 8410
+
+Signups land in ../.waitlist/waitlist.jsonl, deliberately outside the directory this server hands
+out, and only the page and its assets are servable: this process sits next to source and local state.
 """
 
+import json
 import os
 import sys
 from functools import partial
@@ -10,25 +14,31 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-os.environ.setdefault("WAITLIST_FILE", os.path.join(HERE, "waitlist.jsonl"))
+os.environ.setdefault("WAITLIST_FILE", os.path.join(HERE, os.pardir, ".waitlist", "waitlist.jsonl"))
 
-from api.waitlist import MAX_BODY, process  # noqa: E402
-import json  # noqa: E402
+from api.waitlist import process, read_length  # noqa: E402
 
 
 class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):  # noqa: N802
         if self.path.rstrip("/") != "/api/waitlist":
-            self.send_error(404)
-            return
-        length = int(self.headers.get("content-length") or 0)
-        status, body = (413, {"message": "Request too large."}) if length > MAX_BODY else process(self.rfile.read(length))
+            return self.send_error(404)
+        length = read_length(self.headers.get("content-length"))
+        if length is None:
+            status, body = 413, {"message": "Request too large or malformed."}
+        else:
+            status, body = process(self.rfile.read(length))
         raw = json.dumps(body).encode()
         self.send_response(status)
         self.send_header("content-type", "application/json")
         self.send_header("content-length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
+
+    def do_GET(self):  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        allowed = path in ("/", "/index.html") or (path.startswith("/assets/") and ".." not in path)
+        return super().do_GET() if allowed else self.send_error(404)
 
     def end_headers(self):
         self.send_header("cache-control", "no-store")

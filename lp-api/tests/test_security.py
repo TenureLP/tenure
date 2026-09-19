@@ -1,0 +1,235 @@
+"""Regression tests for the findings of the security review. Each one fails on the old code."""
+
+import base64
+import json
+import os
+import sys
+import tempfile
+import unittest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "landing"))
+
+from lpval import secp256k1  # noqa: E402
+from lpval.paywall import Paywall, payment_message  # noqa: E402
+from lpval.rpc import REVERTED, Rpc, UpstreamError  # noqa: E402
+
+CHAIN = 4663
+PAY_TO = "0x00000000000000000000000000000000000000ab"
+ROUTE = "/v1/position/1"
+# A throwaway key, used only to sign test messages.
+KEY = 0x59C6995E998F97A5A0044966F0945389DC9E86DAE88C7A8412F4603B6B78690D
+
+
+class FakeRpc:
+    """Stands in for the chain. Every field the paywall reads can be bent from a test."""
+
+    def __init__(self, **over):
+        self.tx = {
+            "to": PAY_TO,
+            "from": _addr(KEY),
+            "value": hex(10**12),
+        }
+        self.receipt = {"status": "0x1", "blockNumber": hex(1000)}
+        self.head = hex(1010)
+        self.__dict__.update(over)
+
+    def batch(self, reqs):
+        return [self.tx, self.receipt, self.head]
+
+
+def _addr(priv: int) -> str:
+    point = secp256k1._mul((secp256k1.GX, secp256k1.GY), priv)
+    raw = point[0].to_bytes(32, "big") + point[1].to_bytes(32, "big")
+    from lpval.keccak import keccak256
+
+    return "0x" + keccak256(raw)[12:].hex()
+
+
+def _sign(priv: int, msg_hash: bytes) -> str:
+    """Deterministic ECDSA (RFC 6979 would be nicer; a counter is enough for a test)."""
+    import hashlib
+
+    z = int.from_bytes(msg_hash, "big")
+    for k in range(1, 1000):
+        k = int.from_bytes(hashlib.sha256(msg_hash + k.to_bytes(4, "big")).digest(), "big") % secp256k1.N
+        if k == 0:
+            continue
+        point = secp256k1._mul((secp256k1.GX, secp256k1.GY), k)
+        r = point[0] % secp256k1.N
+        if r == 0:
+            continue
+        s = (pow(k, secp256k1.N - 2, secp256k1.N) * (z + r * priv)) % secp256k1.N
+        if s == 0:
+            continue
+        v = point[1] & 1
+        if s > secp256k1.N // 2:
+            s, v = secp256k1.N - s, v ^ 1
+        return "0x" + r.to_bytes(32, "big").hex() + s.to_bytes(32, "big").hex() + bytes([v + 27]).hex()
+    raise AssertionError("no signature found")
+
+
+def _paywall(rpc=None, **env):
+    tmp = tempfile.mkdtemp()
+    os.environ["LPVAL_PAY_TO"] = PAY_TO
+    os.environ["LPVAL_DB"] = os.path.join(tmp, "p.sqlite")
+    os.environ["LPVAL_PRICE_WEI"] = "1000000000000"
+    os.environ.update(env)
+    return Paywall(rpc or FakeRpc(), CHAIN)
+
+
+def _proof(pw, tx_hash, priv=KEY, route=ROUTE, nonce=None):
+    nonce = nonce or pw.challenge(route)["nonce"]
+    msg = payment_message(tx_hash, route, nonce, CHAIN, PAY_TO)
+    return {
+        "scheme": "onchain-tx",
+        "txHash": tx_hash,
+        "payer": _addr(priv),
+        "nonce": nonce,
+        "signature": _sign(priv, secp256k1.personal_hash(msg)),
+    }
+
+
+TX = "0x" + "ab" * 32
+
+
+class SignatureTest(unittest.TestCase):
+    def test_recover_roundtrip(self):
+        h = secp256k1.personal_hash("hello")
+        self.assertEqual(secp256k1.recover(h, bytes.fromhex(_sign(KEY, h)[2:])).lower(), _addr(KEY).lower())
+
+    def test_rejects_high_s(self):
+        h = secp256k1.personal_hash("hello")
+        sig = bytearray(bytes.fromhex(_sign(KEY, h)[2:]))
+        sig[32:64] = (secp256k1.N - int.from_bytes(sig[32:64], "big")).to_bytes(32, "big")
+        with self.assertRaises(secp256k1.BadSignature):
+            secp256k1.recover(h, bytes(sig))
+
+
+class PaywallTest(unittest.TestCase):
+    def test_happy_path(self):
+        pw = _paywall()
+        ok, reason, receipt = pw.verify(_proof(pw, TX), ROUTE)
+        self.assertTrue(ok, reason)
+        self.assertEqual(receipt["payer"], _addr(KEY).lower())
+
+    def test_hash_alone_is_not_enough(self):
+        """The old bug: whoever saw the hash on chain could spend somebody else's payment."""
+        pw = _paywall()
+        proof, err = Paywall.parse_proof({"X-Payment-Tx": TX})
+        self.assertIsNone(proof)
+        self.assertIsNone(err)  # no proof at all, so a plain 402 rather than an accepted payment
+
+    def test_signature_from_another_account_is_rejected(self):
+        pw = _paywall()
+        other = KEY + 1
+        proof = _proof(pw, TX, priv=other)
+        proof["payer"] = _addr(KEY)  # claim to be the real payer
+        ok, reason, _ = pw.verify(proof, ROUTE)
+        self.assertFalse(ok)
+        self.assertIn("not produced by the declared payer", reason)
+
+    def test_proof_for_another_route_is_rejected(self):
+        pw = _paywall()
+        proof = _proof(pw, TX, route="/v1/position/999")
+        ok, reason, _ = pw.verify(proof, ROUTE)
+        self.assertFalse(ok)
+
+    def test_replay_is_rejected(self):
+        pw = _paywall()
+        self.assertTrue(pw.verify(_proof(pw, TX), ROUTE)[0])
+        ok, reason, _ = pw.verify(_proof(pw, TX), ROUTE)
+        self.assertFalse(ok)
+        self.assertEqual(reason, "payment already used")
+
+    def test_release_lets_a_failed_request_be_retried(self):
+        pw = _paywall()
+        self.assertTrue(pw.verify(_proof(pw, TX), ROUTE)[0])
+        pw.release(TX)
+        self.assertTrue(pw.verify(_proof(pw, TX), ROUTE)[0])
+
+    def test_zero_confirmations_is_rejected(self):
+        pw = _paywall(FakeRpc(head=hex(1000)))
+        ok, reason, _ = pw.verify(_proof(pw, TX), ROUTE)
+        self.assertFalse(ok)
+        self.assertIn("confirmations", reason)
+
+    def test_missing_head_fails_closed(self):
+        pw = _paywall(FakeRpc(head=None))
+        ok, reason, _ = pw.verify(_proof(pw, TX), ROUTE)
+        self.assertFalse(ok)
+        self.assertIn("chain head", reason)
+
+    def test_unreachable_chain_does_not_accept(self):
+        class Dead:
+            def batch(self, reqs):
+                raise UpstreamError("down")
+
+        pw = _paywall(Dead())
+        ok, reason, _ = pw.verify(_proof(pw, TX), ROUTE)
+        self.assertFalse(ok)
+
+    def test_malformed_rpc_shapes_do_not_crash(self):
+        for over in [{"tx": "a string"}, {"receipt": {}}, {"tx": {"to": PAY_TO, "value": 12}}, {"head": "zz"}]:
+            pw = _paywall(FakeRpc(**over))
+            ok, _, _ = pw.verify(_proof(pw, TX), ROUTE)
+            self.assertFalse(ok, over)
+
+    def test_garbage_proofs_are_rejected_not_crashes(self):
+        for raw in [b"[]", b"1", b"null", b"true", b'{"scheme":"onchain-tx","txHash":1}', b"not-base64"]:
+            header = base64.b64encode(raw).decode() if raw != b"not-base64" else "!!!"
+            proof, err = Paywall.parse_proof({"PAYMENT-SIGNATURE": header})
+            self.assertIsNone(proof)
+            self.assertIsInstance(err, str)
+
+    def test_nonce_cannot_be_invented(self):
+        pw = _paywall()
+        proof = _proof(pw, TX, nonce="0" * 32)
+        ok, reason, _ = pw.verify(proof, ROUTE)
+        self.assertFalse(ok)
+        self.assertIn("nonce", reason)
+
+
+class RpcTest(unittest.TestCase):
+    def test_refuses_plain_http(self):
+        with self.assertRaises(ValueError):
+            Rpc("http://evil.example")
+
+    def test_reverted_is_not_the_same_as_unreachable(self):
+        self.assertIsNot(REVERTED, None)
+
+
+class WaitlistTest(unittest.TestCase):
+    def setUp(self):
+        from api import waitlist
+
+        self.waitlist = waitlist
+        os.environ["WAITLIST_FILE"] = os.path.join(tempfile.mkdtemp(), "w.jsonl")
+        os.environ.pop("WAITLIST_WEBHOOK_URL", None)
+        os.environ.pop("VERCEL", None)
+
+    def test_negative_content_length_is_refused(self):
+        self.assertIsNone(self.waitlist.read_length("-1"))
+        self.assertIsNone(self.waitlist.read_length("abc"))
+        self.assertIsNone(self.waitlist.read_length(str(self.waitlist.MAX_BODY + 1)))
+        self.assertEqual(self.waitlist.read_length("10"), 10)
+
+    def test_type_confusion_does_not_crash(self):
+        for body in [b'{"email":"a@b.co","role":[]}', b'{"email":"a@b.co","source":{}}']:
+            status, _ = self.waitlist.process(body)
+            self.assertEqual(status, 200)
+
+    def test_no_enumeration_oracle(self):
+        first = self.waitlist.process(b'{"email":"a@b.co"}')
+        second = self.waitlist.process(b'{"email":"a@b.co"}')
+        self.assertEqual(first, second)
+        self.assertNotIn("duplicate", json.dumps(second[1]))
+
+    def test_chat_injection_is_stripped(self):
+        cleaned = self.waitlist._safe("x`[click](https://evil.tld)`y@z.co")
+        for ch in "`[]()":
+            self.assertNotIn(ch, cleaned)
+
+
+if __name__ == "__main__":
+    unittest.main()

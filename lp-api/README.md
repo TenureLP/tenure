@@ -51,23 +51,31 @@ bash tests/smoke.sh
 
 ## Paywall
 
-Désactivé par défaut. Pour l'activer :
+Desactive par defaut. Pour l'activer :
 
 ```bash
 LPVAL_PAY_TO=0xTonAdresse LPVAL_PRICE_WEI=1000000000000 ./run.sh serve
 ```
 
-Sans preuve de paiement, les routes payantes répondent 402 avec l'adresse, le montant et la chaîne, dans le corps et dans l'en-tête `PAYMENT-REQUIRED`. Le client envoie l'ETH, puis rappelle avec la preuve au format documenté par Olanas :
+Sans preuve, les routes payantes repondent 402 avec l'adresse, le montant, le nombre de
+confirmations exige et un **nonce** a usage unique. Le client envoie l'ETH, signe le texte fourni
+dans la reponse avec le compte qui a payé, puis rappelle :
 
 ```
-PAYMENT-SIGNATURE: base64({"scheme":"onchain-tx","txHash":"0x..","payer":"0x.."})
+PAYMENT-SIGNATURE: base64({"scheme":"onchain-tx","txHash":"0x..","payer":"0x..","nonce":"..","signature":"0x.."})
 ```
 
-Le raccourci `X-Payment-Tx: <hash>` est aussi accepté. Le serveur vérifie le destinataire, le payeur, le montant, le succès, l'ancienneté (une heure au plus), refuse tout hash déjà utilisé, et renvoie un reçu dans `PAYMENT-RESPONSE`.
+La signature est indispensable, et c'est le point important. Un hash de transaction est public des
+qu'il est mine : si le hash seul suffisait, n'importe qui surveillant la chaine pourrait depenser le
+paiement d'un client avant lui, et tout virement arrivant par hasard sur l'adresse deviendrait une
+requete gratuite. Le serveur ne compte un paiement que si le signataire recupere est bien le compte
+qui a envoye les fonds, si le nonce vient de lui, et si la transaction a assez de confirmations.
 
-Différence voulue avec Olanas : chez eux une preuve reste réutilisable pour la même ressource, ce qui convient à un téléchargement. Ici un paiement achète une seule requête.
+Verifie avant d'accepter : destinataire, expediteur, montant, succes, profondeur (3 blocs par
+defaut), anciennete (une heure au plus), nonce valide pour cette route, et hash jamais depense. Si
+la requete echoue ensuite de notre cote, le paiement est rendu pour que le client puisse reessayer.
 
-Test du chemin complet sans bouger de fonds, en rejouant un vrai transfert de la chaîne comme preuve :
+Test du chemin complet contre la chaine reelle, sans bouger de fonds :
 
 ```bash
 python3 tests/paywall_live.py

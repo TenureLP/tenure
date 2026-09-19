@@ -5,7 +5,7 @@ import time
 
 from . import abi, snapshots, v4math
 from .keccak import keccak256
-from .rpc import Rpc
+from .rpc import REVERTED, Rpc, UpstreamError
 
 CHAIN_ID = 4663
 RPC_URL = os.environ.get("LPVAL_RPC", "https://rpc.mainnet.chain.robinhood.com")
@@ -39,8 +39,10 @@ def _load_tokens(rpc: Rpc, addrs):
         res = rpc.eth_calls(calls)
         for i, a in enumerate(missing):
             dec_raw, sym_raw = res[2 * i], res[2 * i + 1]
-            decimals = abi.words(dec_raw)[0] if dec_raw else 18
-            symbol = abi.decode_string(sym_raw) if sym_raw else "?"
+            ok_dec = isinstance(dec_raw, bytes) and len(dec_raw) >= 32
+            ok_sym = isinstance(sym_raw, bytes) and len(sym_raw) > 0
+            decimals = abi.words(dec_raw)[0] if ok_dec else 18
+            symbol = abi.decode_string(sym_raw) if ok_sym else "?"
             _token_cache[a] = {"address": a, "symbol": symbol, "decimals": int(decimals)}
     return [_token_cache[a] for a in addrs]
 
@@ -56,6 +58,8 @@ def read_position(rpc: Rpc, token_id: int, block="latest") -> dict:
         ],
         block,
     )
+    if r[0] is REVERTED or r[1] is REVERTED:
+        raise PositionNotFound(f"token {token_id} not found")
     if not r[0] or len(r[0]) < 192:
         raise PositionNotFound(f"token {token_id} not found")
     w = abi.words(r[0])
@@ -91,14 +95,16 @@ def read_position(rpc: Rpc, token_id: int, block="latest") -> dict:
         ],
         block,
     )
-    if not all(r2):
+    if any(x is REVERTED for x in r2):
         raise PositionNotFound(f"pool state unavailable for token {token_id}")
+    if not all(r2):
+        raise UpstreamError(f"the chain did not answer for token {token_id}")
     slot0, fg, pinfo = abi.words(r2[0]), abi.words(r2[1]), abi.words(r2[2])
     t0, t1 = _load_tokens(rpc, [c0, c1])
 
     return {
         "tokenId": token_id,
-        "owner": abi.word_to_addr(abi.words(r[2])[0]) if r[2] else None,
+        "owner": abi.word_to_addr(abi.words(r[2])[0]) if isinstance(r[2], bytes) and r[2] else None,
         "poolId": "0x" + pool_id.hex(),
         "token0": t0,
         "token1": t1,
@@ -203,7 +209,7 @@ def _fee_rate(rpc: Rpc, p: dict, principal_usdg, lookback_hours: float) -> dict:
                 abi.enc_int(p["tickUpper"]),
             )
             past = rpc.eth_calls([(STATE_VIEW, data)], past_block)[0]
-            if not past:
+            if not isinstance(past, bytes) or len(past) < 64:
                 return {"available": False, "reason": "no snapshot yet and historical state not served by this RPC"}
             elapsed = rpc.block_timestamp(now_block) - rpc.block_timestamp(past_block)
             source, pw = "rpc-short-window", abi.words(past)

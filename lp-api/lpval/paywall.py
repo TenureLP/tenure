@@ -1,10 +1,16 @@
-"""Pay-per-request gate: HTTP 402 challenge, settled by a confirmed on-chain ETH transfer.
+"""Pay-per-request gate: HTTP 402, settled by a confirmed on-chain transfer plus a signature.
+
+Why the signature. A transaction hash is public the moment it lands, so if the hash alone bought a
+response, anyone watching the chain could spend a customer's payment before the customer redeemed
+it — and any unrelated transfer that happened to reach our address would be a free request. The
+payer therefore signs a message naming the transaction, the resource and a nonce the server issued,
+and we only accept the proof if the recovered signer is the account that actually sent the money.
 
 Flow:
-  1. Client calls a paid route with no payment header. Server answers 402 with payTo / amountWei / chainId.
-  2. Client sends that amount of ETH to payTo on Robinhood Chain.
-  3. Client retries with header `X-Payment-Tx: 0x<txhash>`.
-  4. Server checks the tx (recipient, value, success, recent) and that the hash was never used before.
+  1. Client calls a paid route with no proof. Server answers 402 with payTo, amountWei and a nonce.
+  2. Client sends the ETH, then signs `payment_message(...)` with the sending account.
+  3. Client retries with `PAYMENT-SIGNATURE: base64({scheme, txHash, payer, nonce, signature})`.
+  4. Server checks the transfer, the signature, the nonce and that the hash was never spent.
 
 Disabled unless LPVAL_PAY_TO is set, so the prototype runs free by default.
 """
@@ -12,12 +18,33 @@ Disabled unless LPVAL_PAY_TO is set, so the prototype runs free by default.
 import base64
 import json
 import os
+import re
+import secrets
 import sqlite3
 import threading
+import time
 
-from .rpc import Rpc
+from .rpc import Rpc, UpstreamError
+from .secp256k1 import BadSignature, personal_hash, recover
 
+MIN_CONFIRMATIONS = int(os.environ.get("LPVAL_MIN_CONFIRMATIONS", "3"))
 MAX_AGE_BLOCKS = 36_000  # about one hour of 100 ms blocks
+NONCE_TTL = 900  # seconds a challenge stays redeemable
+HASH_RE = re.compile(r"^0x[0-9a-f]{64}$")
+ADDR_RE = re.compile(r"^0x[0-9a-f]{40}$")
+
+
+def payment_message(tx_hash: str, resource: str, nonce: str, chain_id: int, pay_to: str) -> str:
+    """The exact text the payer signs. Naming the resource and the nonce is what stops a proof for
+    one request being replayed against another."""
+    return (
+        "tenure payment\n"
+        f"chain: {chain_id}\n"
+        f"to: {pay_to}\n"
+        f"tx: {tx_hash}\n"
+        f"resource: {resource}\n"
+        f"nonce: {nonce}"
+    )
 
 
 class Paywall:
@@ -27,12 +54,26 @@ class Paywall:
         self.pay_to = (os.environ.get("LPVAL_PAY_TO") or "").lower()
         self.price_wei = int(os.environ.get("LPVAL_PRICE_WEI", "1000000000000"))  # 0.000001 ETH
         self.enabled = bool(self.pay_to)
+        if self.enabled and not ADDR_RE.match(self.pay_to):
+            raise ValueError("LPVAL_PAY_TO is not an address")
         self._lock = threading.Lock()
         self._db = sqlite3.connect(os.environ.get("LPVAL_DB", "lpval_payments.sqlite"), check_same_thread=False)
-        self._db.execute("CREATE TABLE IF NOT EXISTS used (tx TEXT PRIMARY KEY, payer TEXT, route TEXT)")
+        self._db.execute("PRAGMA journal_mode=WAL")
+        # `ts` exists so spent payments can be pruned once they are past redeeming.
+        self._db.execute("CREATE TABLE IF NOT EXISTS used (tx TEXT PRIMARY KEY, payer TEXT, route TEXT, ts INTEGER)")
+        self._db.execute("CREATE TABLE IF NOT EXISTS nonce (n TEXT PRIMARY KEY, route TEXT, ts INTEGER)")
+        self._db.execute("CREATE INDEX IF NOT EXISTS used_ts ON used (ts)")
         self._db.commit()
+        self._last_prune = 0.0
+
+    # ------------------------------------------------------------------ challenge
 
     def challenge(self, route: str) -> dict:
+        nonce = secrets.token_hex(16)
+        with self._lock:
+            self._db.execute("INSERT OR REPLACE INTO nonce VALUES (?,?,?)", (nonce, route, int(time.time())))
+            self._db.commit()
+        self._maybe_prune()
         return {
             "error": "payment_required",
             "scheme": "onchain-tx",
@@ -42,78 +83,170 @@ class Paywall:
             "payTo": self.pay_to,
             "amountWei": str(self.price_wei),
             "resource": route,
-            "instructions": "Send amountWei of ETH to payTo, then retry with header PAYMENT-SIGNATURE: "
-            'base64({"scheme":"onchain-tx","txHash":"0x..","payer":"0x.."}) or X-Payment-Tx: <tx hash>. '
-            "One payment buys one request.",
+            "nonce": nonce,
+            "minConfirmations": MIN_CONFIRMATIONS,
+            "expiresInSeconds": NONCE_TTL,
+            "signThis": payment_message("<txHash>", route, nonce, self.chain_id, self.pay_to),
+            "instructions": (
+                "Send amountWei of ETH to payTo, sign the signThis text with the sending account "
+                "(personal_sign, with <txHash> replaced by the real hash), then retry with header "
+                "PAYMENT-SIGNATURE: base64 of "
+                '{"scheme":"onchain-tx","txHash":"0x..","payer":"0x..","nonce":"..","signature":"0x.."}'
+            ),
         }
+
+    # ------------------------------------------------------------------ proof parsing
 
     @staticmethod
     def parse_proof(headers):
-        """Accepts the Olanas-style proof or the bare-hash shortcut. Returns (tx_hash, payer, error).
-
-        PAYMENT-SIGNATURE: base64(JSON {"scheme": "onchain-tx", "txHash": "0x..", "payer": "0x.."})
-        X-Payment-Tx:      0x<txhash>
-        """
+        """Returns (proof, error). `proof` is a dict of strings, never anything else."""
         sig = headers.get("PAYMENT-SIGNATURE")
-        if sig:
-            try:
-                proof = json.loads(base64.b64decode(sig + "=" * (-len(sig) % 4)))
-            except Exception:
-                return None, None, "PAYMENT-SIGNATURE is not base64-encoded JSON"
-            if proof.get("scheme") != "onchain-tx":
-                return None, None, "unsupported scheme, expected onchain-tx"
-            return proof.get("txHash"), proof.get("payer"), None
-        return headers.get("X-Payment-Tx"), None, None
+        if not sig:
+            return None, None
+        try:
+            raw = base64.b64decode(sig + "=" * (-len(sig) % 4), validate=False)
+            proof = json.loads(raw)
+        except Exception:
+            return None, "PAYMENT-SIGNATURE is not base64-encoded JSON"
+        if not isinstance(proof, dict):
+            return None, "the proof must be a JSON object"
+        if proof.get("scheme") != "onchain-tx":
+            return None, "unsupported scheme, expected onchain-tx"
+        out = {}
+        for field in ("txHash", "payer", "nonce", "signature"):
+            value = proof.get(field)
+            if not isinstance(value, str):
+                return None, f"missing or malformed field: {field}"
+            out[field] = value
+        return out, None
 
     @staticmethod
     def encode(obj: dict) -> str:
         return base64.b64encode(json.dumps(obj, separators=(",", ":")).encode()).decode()
 
-    def verify(self, tx_hash: str, route: str, payer: str = None):
-        """Returns (ok, reason, receipt). Stricter than Olanas: one payment buys exactly one request."""
-        ok, reason, tx = self._verify(tx_hash, route, payer)
+    # ------------------------------------------------------------------ verification
+
+    def verify(self, proof: dict, route: str):
+        """Returns (ok, reason, receipt). On failure nothing is consumed and the client may retry."""
+        tx_hash = proof["txHash"].lower()
+        payer = proof["payer"].lower()
+        if not HASH_RE.match(tx_hash):
+            return False, "malformed transaction hash", None
+        if not ADDR_RE.match(payer):
+            return False, "malformed payer address", None
+
+        # Cheap checks before any upstream call, so a spray of invalid proofs costs us nothing.
+        if self._is_spent(tx_hash):
+            return False, "payment already used", None
+        if not self._nonce_valid(proof["nonce"], route):
+            return False, "unknown or expired nonce, request a new challenge", None
+        try:
+            signer = recover(
+                personal_hash(payment_message(tx_hash, route, proof["nonce"], self.chain_id, self.pay_to)),
+                bytes.fromhex(proof["signature"][2:] if proof["signature"].startswith("0x") else proof["signature"]),
+            )
+        except (BadSignature, ValueError):
+            return False, "signature does not verify", None
+        if signer.lower() != payer:
+            return False, "signature was not produced by the declared payer", None
+
+        ok, reason, tx = self._check_transfer(tx_hash, payer)
         if not ok:
             return False, reason, None
-        receipt = {
+        if not self._spend(tx_hash, payer, route):
+            return False, "payment already used", None
+        self._consume_nonce(proof["nonce"])
+        return True, "ok", {
             "success": True,
             "scheme": "onchain-tx",
             "network": f"eip155:{self.chain_id}",
-            "transaction": tx_hash.lower(),
-            "payer": tx.get("from"),
+            "transaction": tx_hash,
+            "payer": payer,
             "payTo": self.pay_to,
-            "amountWei": str(int(tx.get("value", "0x0"), 16)),
+            "amountWei": str(int(tx["value"], 16)),
             "resource": route,
         }
-        return True, "ok", receipt
 
-    def _verify(self, tx_hash: str, route: str, payer: str = None):
-        tx_hash = (tx_hash or "").lower()
-        if not (tx_hash.startswith("0x") and len(tx_hash) == 66):
-            return False, "malformed tx hash", None
-        res = self.rpc.batch(
-            [
-                ("eth_getTransactionByHash", [tx_hash]),
-                ("eth_getTransactionReceipt", [tx_hash]),
-                ("eth_blockNumber", []),
-            ]
-        )
-        tx, receipt, head = res
-        if not tx or not receipt:
+    def _check_transfer(self, tx_hash: str, payer: str):
+        """Everything the chain has to agree with before a payment counts."""
+        try:
+            tx, receipt, head = self.rpc.batch(
+                [
+                    ("eth_getTransactionByHash", [tx_hash]),
+                    ("eth_getTransactionReceipt", [tx_hash]),
+                    ("eth_blockNumber", []),
+                ]
+            )
+        except UpstreamError:
+            return False, "cannot reach the chain right now", None
+        if not isinstance(tx, dict) or not isinstance(receipt, dict):
             return False, "transaction not found or not yet confirmed", None
+        # Fail closed: without the head we cannot judge age or depth at all.
+        if not isinstance(head, str):
+            return False, "cannot determine the chain head", None
+        try:
+            value = int(tx["value"], 16)
+            mined_in = int(receipt["blockNumber"], 16)
+            tip = int(head, 16)
+        except (KeyError, TypeError, ValueError):
+            return False, "malformed response from the chain", None
+
         if receipt.get("status") != "0x1":
             return False, "transaction failed", None
-        if (tx.get("to") or "").lower() != self.pay_to:
+        if not isinstance(tx.get("to"), str) or tx["to"].lower() != self.pay_to:
             return False, "wrong recipient", None
-        if payer and (tx.get("from") or "").lower() != payer.lower():
-            return False, "payer does not match the transaction sender", None
-        if int(tx.get("value", "0x0"), 16) < self.price_wei:
+        if not isinstance(tx.get("from"), str) or tx["from"].lower() != payer:
+            return False, "the declared payer did not send this transaction", None
+        if value < self.price_wei:
             return False, "amount too low", None
-        if head and int(head, 16) - int(receipt["blockNumber"], 16) > MAX_AGE_BLOCKS:
+        if tip - mined_in < MIN_CONFIRMATIONS:
+            return False, f"not enough confirmations yet, need {MIN_CONFIRMATIONS}", None
+        if tip - mined_in > MAX_AGE_BLOCKS:
             return False, "payment too old", None
+        return True, "ok", tx
+
+    # ------------------------------------------------------------------ ledger
+
+    def _is_spent(self, tx_hash: str) -> bool:
+        with self._lock:
+            return self._db.execute("SELECT 1 FROM used WHERE tx=?", (tx_hash,)).fetchone() is not None
+
+    def _spend(self, tx_hash: str, payer: str, route: str) -> bool:
+        """Atomically claims the payment. False means somebody else got there first."""
         with self._lock:
             try:
-                self._db.execute("INSERT INTO used (tx, payer, route) VALUES (?, ?, ?)", (tx_hash, tx.get("from"), route))
+                self._db.execute("INSERT INTO used VALUES (?,?,?,?)", (tx_hash, payer, route, int(time.time())))
                 self._db.commit()
+                return True
             except sqlite3.IntegrityError:
-                return False, "payment already used", None
-        return True, "ok", tx
+                return False
+
+    def release(self, tx_hash: str) -> None:
+        """Give a payment back after a failure on our side, so the payer is not charged for nothing."""
+        with self._lock:
+            self._db.execute("DELETE FROM used WHERE tx=?", (tx_hash.lower(),))
+            self._db.commit()
+
+    def _nonce_valid(self, nonce: str, route: str) -> bool:
+        if not isinstance(nonce, str) or len(nonce) != 32:
+            return False
+        with self._lock:
+            row = self._db.execute("SELECT route, ts FROM nonce WHERE n=?", (nonce,)).fetchone()
+        return bool(row) and row[0] == route and time.time() - row[1] <= NONCE_TTL
+
+    def _consume_nonce(self, nonce: str) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM nonce WHERE n=?", (nonce,))
+            self._db.commit()
+
+    def _maybe_prune(self) -> None:
+        """Spent payments and stale challenges are dead weight once they can no longer be redeemed."""
+        now = time.time()
+        if now - self._last_prune < 3600:
+            return
+        self._last_prune = now
+        cutoff = int(now) - 2 * 3600
+        with self._lock:
+            self._db.execute("DELETE FROM used WHERE ts < ?", (cutoff,))
+            self._db.execute("DELETE FROM nonce WHERE ts < ?", (int(now) - NONCE_TTL,))
+            self._db.commit()

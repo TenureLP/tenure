@@ -1,8 +1,10 @@
-"""Live paywall test that moves no funds.
+"""Live check against the real chain: a payment nobody can prove they made buys nothing.
 
-Finds a real, recent ETH transfer on Robinhood Chain, starts the server configured as if that
-transfer's recipient were the seller, and presents the hash as an Olanas-style proof.
+Takes a real ETH transfer from a recent block, stands the server up as if that transfer's recipient
+were the seller, and confirms that presenting the hash alone — the attack the paywall used to be
+open to — is refused. Moves no funds and writes to no live endpoint.
 """
+
 import base64
 import json
 import os
@@ -41,10 +43,6 @@ def get(path, headers=None):
         return e.code, dict(e.headers), json.loads(e.read())
 
 
-def proof(tx_hash, payer):
-    return base64.b64encode(json.dumps({"scheme": "onchain-tx", "txHash": tx_hash, "payer": payer}).encode()).decode()
-
-
 rpc = Rpc(RPC_URL)
 tx = find_transfer(rpc)
 if not tx:
@@ -58,9 +56,8 @@ env = dict(
     LPVAL_DB=f"/tmp/lpval_pay_{int(time.time())}.sqlite",
     LPVAL_SNAP_DB="/tmp/lpval_snap.sqlite",
 )
-srv = subprocess.Popen(
-    [sys.executable, "-m", "lpval", "serve", "--port", str(PORT)], cwd=ROOT, env=env, stdout=subprocess.DEVNULL
-)
+srv = subprocess.Popen([sys.executable, "-m", "lpval", "serve", "--port", str(PORT)], cwd=ROOT, env=env,
+                       stdout=subprocess.DEVNULL)
 time.sleep(1.5)
 failures = 0
 
@@ -71,28 +68,35 @@ def check(name, cond, detail=""):
     print(("PASS " if cond else "FAIL ") + name + (f"  {detail}" if detail else ""))
 
 
+def proof(**kw):
+    return base64.b64encode(json.dumps(dict(scheme="onchain-tx", **kw)).encode()).decode()
+
+
 try:
     path = f"/v1/position/{TOKEN}"
     s, h, b = get(path)
-    check("no proof -> 402 with PAYMENT-REQUIRED header", s == 402 and "PAYMENT-REQUIRED" in h, b.get("payTo"))
-
-    s, h, b = get(path, {"PAYMENT-SIGNATURE": proof(tx["hash"], "0x" + "11" * 20)})
-    check("wrong payer -> 402", s == 402, b.get("reason"))
-
-    s, h, b = get(path, {"PAYMENT-SIGNATURE": "not-base64-json"})
-    check("garbage proof -> 402", s == 402, b.get("reason"))
-
-    s, h, b = get(path, {"PAYMENT-SIGNATURE": proof(tx["hash"], tx["from"])})
-    ok = s == 200 and "PAYMENT-RESPONSE" in h and b.get("tokenId") == TOKEN
-    check("valid proof -> 200 with PAYMENT-RESPONSE receipt", ok)
-    if ok:
-        print("     receipt:", json.loads(base64.b64decode(h["PAYMENT-RESPONSE"])))
-
-    s, h, b = get(path, {"PAYMENT-SIGNATURE": proof(tx["hash"], tx["from"])})
-    check("replay of the same proof -> 402", s == 402, b.get("reason"))
+    check("no proof -> 402 carrying a fresh nonce", s == 402 and "PAYMENT-REQUIRED" in h and len(b.get("nonce", "")) == 32)
+    nonce = b["nonce"]
 
     s, h, b = get(path, {"X-Payment-Tx": tx["hash"]})
-    check("replay via X-Payment-Tx -> 402", s == 402, b.get("reason"))
+    check("the bare hash no longer buys anything", s == 402, b.get("reason") or "challenged again")
+
+    s, h, b = get(path, {"PAYMENT-SIGNATURE": proof(txHash=tx["hash"], payer=tx["from"], nonce=nonce, signature="0x" + "11" * 65)})
+    check("a forged signature is refused", s == 402, b.get("reason"))
+
+    s, h, b = get(path, {"PAYMENT-SIGNATURE": proof(txHash=tx["hash"], payer=tx["from"], nonce="0" * 32, signature="0x" + "11" * 65)})
+    check("an invented nonce is refused", s == 402, b.get("reason"))
+
+    s, h, b = get(path, {"PAYMENT-SIGNATURE": "!!!not base64!!!"})
+    check("garbage proof is refused, not a crash", s == 402, b.get("reason"))
+
+    s, h, b = get("/health")
+    check("health stays free", s == 200)
+
+    req = urllib.request.Request(f"http://127.0.0.1:{PORT}{path}", method="OPTIONS")
+    with urllib.request.urlopen(req, timeout=10) as r:
+        check("CORS preflight allows the payment header",
+              r.status == 204 and "payment-signature" in r.headers.get("access-control-allow-headers", ""))
 finally:
     srv.terminate()
     srv.wait()
