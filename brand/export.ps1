@@ -5,7 +5,7 @@ $wslDir = (wsl -e wslpath -a "$dir").Trim()
 wsl -e python3 "$wslDir/build.py" @args
 
 $exe = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-$profileDir = Join-Path $env:TEMP "claude-headless-profile"
+$profileDir = Join-Path $env:TEMP "tenure-render-profile"
 $jobs = @(
   @{ svg = "logo-mark.svg"; png = "logo-mark-1024.png"; w = 512; h = 512; scale = 2 },
   @{ svg = "logo-mark.svg"; png = "logo-mark-512.png"; w = 512; h = 512; scale = 1 },

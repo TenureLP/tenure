@@ -10,7 +10,7 @@ $page = "file:///" + (Join-Path $dir "intro.html").Replace("\", "/")
 $q = if ($Tag) { "&tag=" + [uri]::EscapeDataString($Tag) } else { "" }
 
 function Shoot([int]$ms, [string]$out, [int]$slot) {
-  $prof = Join-Path $env:TEMP "claude-headless-video-$slot"
+  $prof = Join-Path $env:TEMP "tenure-render-video-$slot"
   $a = @("--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--user-data-dir=`"$prof`"",
          "--force-device-scale-factor=1", "--window-size=1920,1080", "--virtual-time-budget=400",
          "--screenshot=`"$out`"", "`"$page`?t=$ms$q`"")
