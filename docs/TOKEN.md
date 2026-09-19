@@ -2,7 +2,7 @@
 
 ## What is live
 
-**TEN**, at [`0x4bA94fB1D3fDF414afdc955CD29836016eDF3531`](https://robinhoodchain.blockscout.com/address/0x4bA94fB1D3fDF414afdc955CD29836016eDF3531)
+**TEN**, at [`0xD66C5B89fF7b95ad6E73a0B183d74579EB9d6cCb`](https://robinhoodchain.blockscout.com/address/0xD66C5B89fF7b95ad6E73a0B183d74579EB9d6cCb)
 on Robinhood Chain. One billion units, eighteen decimals, launched on the Pons bonding curve.
 
 It was **created by the Pons launchpad from its own template**, not from `TenureToken.sol` in this
@@ -19,9 +19,20 @@ It asks the contract for twenty-four selectors — ownership, minting, pausing, 
 trading gates, upgrading — and reports which it answers. **It answers none of them.** The script
 defaults to the public RPC, so repeating it needs no key and no trust in this file.
 
-Also read from the chain at launch: the deploying address holds **zero** TEN. There was no developer
-buy in the launch transaction, which is the thing to look at first on any bonding-curve launch and
-the thing a screenshot of a website cannot tell you.
+### There was an earlier contract
+
+TEN was deployed twice. The first contract, at `0x4bA94fB1D3fDF414afdc955CD29836016eDF3531`, was
+abandoned and replaced by the one above. It is not hidden here because somebody will find it, and a
+project that only mentions the contract it likes is the one people stop believing.
+
+At the time of the change the curve still held 97.3% of that supply, and two ordinary accounts held
+the rest: one with 2.34%, one with a rounding error. Whoever that first holder is, the token they
+bought is no longer the one being talked about. If they are not us, they should be made whole, and
+this file should say how they were.
+
+Also read from the chain: the deploying address holds **zero** TEN on both contracts. There was no
+developer buy in either launch transaction, which is the thing to look at first on any bonding-curve
+launch and the thing a screenshot of a website cannot tell you.
 
 ## What follows
 

@@ -12,7 +12,7 @@
 set -uo pipefail
 cd "$(dirname "$0")" || exit 1
 
-TOKEN="${1:-0x4bA94fB1D3fDF414afdc955CD29836016eDF3531}"
+TOKEN="${1:-0xD66C5B89fF7b95ad6E73a0B183d74579EB9d6cCb}"
 RPC="${2:-${LPVAL_RPC:-https://rpc.mainnet.chain.robinhood.com}}"
 
 LPVAL_RPC="$RPC" python3 - "$TOKEN" <<'PY'

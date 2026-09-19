@@ -5,7 +5,7 @@ pragma solidity ^0.8.26;
 /// @notice A fixed-supply ERC-20. Everything that could be used against a holder was left out.
 ///
 /// @dev **This is not the token that was launched.** TEN, at
-///      0x4bA94fB1D3fDF414afdc955CD29836016eDF3531 on Robinhood Chain, was created by the Pons
+///      0xD66C5B89fF7b95ad6E73a0B183d74579EB9d6cCb on Robinhood Chain, was created by the Pons
 ///      launchpad from its own template, not from this file. That contract was checked against the
 ///      same list of privileged selectors this one is tested against and answers none of them; see
 ///      docs/TOKEN.md for what was verified and how to repeat it.
