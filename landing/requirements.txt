@@ -1,0 +1,5 @@
+# No dependencies. The page is static and the signup endpoint uses only the
+# Python standard library.
+#
+# The file is here because build systems detect a Python project by its
+# presence, not by its absence. Keep it empty.

@@ -13,6 +13,7 @@ __pycache__/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
+*.sqlite-shm
 waitlist.jsonl
 
 # Video rendering leftovers

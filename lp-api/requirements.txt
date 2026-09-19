@@ -1,0 +1,5 @@
+# No dependencies. Everything this service needs is in the Python standard
+# library, including the signature recovery in lpval/secp256k1.py.
+#
+# The file is here because build systems detect a Python project by its
+# presence, not by its absence. Keep it empty.
