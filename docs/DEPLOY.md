@@ -59,24 +59,48 @@ stays on loopback.
 
 ## 2. The landing page
 
-A second service from the same repository with **root directory `landing`**. One variable:
+A second service from the same repository with **root directory `landing`**. Signups have to land
+somewhere durable, and there are two ways to arrange that. **Without either, the form answers 503**
+— deliberately, because an endpoint that cannot deliver an address should refuse it rather than
+drop it quietly.
+
+### A volume, and no third party
+
+The default here. Nobody but you ever sees the addresses. Attach a volume, mount it at `/data`, and
+set:
+
+| Variable | Value |
+|---|---|
+| `WAITLIST_DATA_DIR` | `/data` — the mount point, used to prove the file is durable |
+| `WAITLIST_FILE` | `/data/waitlist.jsonl` |
+
+The service refuses to start if `WAITLIST_FILE` sits outside `WAITLIST_DATA_DIR`, for the same
+reason the paywall refuses an ephemeral ledger: a page that collects onto a disk about to be
+discarded looks like it works, and the list is empty when it is finally read.
+
+Read the list without opening any route on the public page:
+
+```bash
+railway ssh --service landing cat /data/waitlist.jsonl | python3 landing/read_waitlist.py
+```
+
+`--count` prints just the number, `--emails` just the addresses. Duplicates are removed on the way
+out rather than on the way in, so the timestamp shown is when that person first joined.
+
+### Or a webhook
 
 | Variable | Value |
 |---|---|
 | `WAITLIST_WEBHOOK_URL` | where signups are POSTed |
 
-A Discord webhook is the quickest: in a private channel, Settings, Integrations, Webhooks, copy the
-URL. Any other URL receives `{"email", "role", "source", "ts"}`.
+Any URL receives `{"email", "role", "source", "ts"}`. A Discord webhook URL is detected and gets a
+Discord-shaped message instead; the address is mangled before it goes into that message, so a
+signup cannot render as a link in the channel. This hands the addresses to whoever runs that
+endpoint, which is the trade for getting a notification pushed to you.
 
-**Without that variable the signup form answers 503.** That is deliberate: the endpoint refuses to
-accept an address it cannot deliver, rather than dropping it silently. Set it before sharing the
-link.
-
-`WAITLIST_FILE` is the local-development path and has to name a file explicitly. It is not a
-substitute for the webhook here: a container's filesystem is replaced on every deploy, so a file
-written inside one is a signup collected and then lost. The server prints where signups go on the
-line it logs at boot, so a misconfigured deployment is visible without having to sign up to find
-out.
+The webhook takes precedence when both are set. The server prints where signups go on the line it
+logs at boot, so a misconfigured deployment is visible without having to sign up to find out.
+`WAITLIST_FILE` alone, with no `PORT`, is the local-development path.
 
 ## What is live now
 

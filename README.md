@@ -58,7 +58,7 @@ Every payout is a balance the owed party withdraws. The vault has no owner and n
 | Folder | What it is | State |
 |---|---|---|
 | [`lease-vault/`](lease-vault) | The contracts. `LeaseVault` is ownerless; `AssetRegistry` holds the policy and is read only at listing. | 39 tests, 5 against live chain state |
-| [`lp-api/`](lp-api) | Position valuation over JSON-RPC, exact integer maths, behind an HTTP 402 gate that speaks x402 v2. | 43 tests, runs against mainnet |
+| [`lp-api/`](lp-api) | Position valuation over JSON-RPC, exact integer maths, behind an HTTP 402 gate that speaks x402 v2. | 45 tests, runs against mainnet |
 | [`landing/`](landing) | Static page and its signup endpoint. | works, not deployed |
 | [`brand/`](brand) | Logo, banner, teaser, all generated from one script. | done |
 

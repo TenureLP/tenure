@@ -33,7 +33,7 @@ jobs:
         working-directory: lp-api
         run: python -m unittest discover -s tests
       - name: every module compiles
-        run: python -m compileall -q lp-api/lpval landing/api landing/dev_server.py landing/server.py brand/build.py
+        run: python -m compileall -q lp-api/lpval landing/api landing/dev_server.py landing/server.py landing/read_waitlist.py brand/build.py
       - name: waitlist endpoint
         run: |
           python - <<'PY'

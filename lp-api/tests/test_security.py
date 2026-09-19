@@ -258,6 +258,48 @@ class WaitlistTest(unittest.TestCase):
         for ch in "`[]()":
             self.assertNotIn(ch, cleaned)
 
+    def test_a_file_on_an_ephemeral_disk_is_not_durable(self):
+        """Same rule as the payment ledger: on a platform that replaces containers, the file has to
+        sit under a mount the operator declared. A signup collected onto a disk that is about to be
+        discarded is worse than one refused, because the page looks like it worked."""
+        import server
+
+        for var in ("PORT", "WAITLIST_DATA_DIR", "WAITLIST_FILE"):
+            os.environ.pop(var, None)
+
+        os.environ["WAITLIST_FILE"] = "/app/waitlist.jsonl"
+        self.assertTrue(server.storage_is_durable(), "no PORT means local, where any path is fine")
+
+        os.environ["PORT"] = "8080"
+        self.assertFalse(server.storage_is_durable(), "a container path with no declared volume")
+
+        os.environ["WAITLIST_DATA_DIR"] = "/data"
+        self.assertFalse(server.storage_is_durable(), "declared volume, but the file is outside it")
+
+        os.environ["WAITLIST_FILE"] = "/data/waitlist.jsonl"
+        self.assertTrue(server.storage_is_durable())
+
+        for var in ("PORT", "WAITLIST_DATA_DIR", "WAITLIST_FILE"):
+            os.environ.pop(var, None)
+
+    def test_reader_deduplicates_and_survives_a_half_written_line(self):
+        import io
+
+        import read_waitlist
+
+        raw = io.StringIO(
+            '{"email":"a@b.co","role":"lp","source":"hero","ts":100}\n'
+            "\n"
+            '{"email":"a@b.co","role":"both","source":"footer","ts":200}\n'
+            '{"email":"c@d.co","role":"financier","source":"hero","ts":300}\n'
+            "not json at all\n"
+            '{"email":"e@f.co","ts":40'  # the append that was still in flight
+        )
+        rows = read_waitlist.read(raw)
+        self.assertEqual([r["email"] for r in rows], ["a@b.co", "c@d.co"])
+        # The first signup wins, so the timestamp is when they actually joined.
+        self.assertEqual(rows[0]["ts"], 100)
+
     def test_unconfigured_refuses_instead_of_dropping(self):
         """With nowhere to deliver, the endpoint must say so. It used to default to a file in the
         working directory, which on a container is erased at the next deploy: the signup was

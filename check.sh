@@ -20,7 +20,8 @@ step "Python: lp-api tests"
 (cd lp-api && python3 -m unittest discover -s tests -q); note $?
 
 step "Python: syntax of every module"
-python3 -m compileall -q lp-api/lpval landing/api landing/dev_server.py brand/build.py >/dev/null; note $?
+python3 -m compileall -q lp-api/lpval landing/api landing/dev_server.py landing/server.py \
+  landing/read_waitlist.py brand/build.py >/dev/null; note $?
 
 step "Landing: waitlist endpoint logic"
 python3 - <<'PY'
