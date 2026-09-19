@@ -222,9 +222,13 @@ def _rpc_window(rpc: Rpc, p: dict, lookback_hours: float):
             continue
         past_block = now_block - blocks_back
         try:
-            past = rpc.eth_calls([(STATE_VIEW, data)], past_block)[0]
+            # persist: "I cannot serve that state" is a fact about one node, not about the chain.
+            # A provider fronting a pool answers it from some of its nodes and not others, so
+            # taking the first refusal at face value hands the same position a 24 hour rate or an
+            # eight minute one depending on the draw, and a rent is quoted off the difference.
+            past = rpc.eth_calls([(STATE_VIEW, data)], past_block, persist=True)[0]
         except Exception:
-            continue  # a node that prunes raises rather than answering; try the shorter window
+            continue  # nobody serves it that far back; try the shorter window
         if not isinstance(past, bytes) or len(past) < 64:
             continue
         if now_ts is None:

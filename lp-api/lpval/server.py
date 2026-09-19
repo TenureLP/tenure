@@ -249,7 +249,9 @@ def serve(host: str = None, port: int = None):
         )
     httpd = ThreadingHTTPServer((host, port), make_handler(rpc, paywall))
     print(
-        f"lpval {__version__} on http://{host}:{port}  rpc={RPC_URL}  "
+        # Hosts only. The url carries the key for most providers, and this line goes to a log that
+        # is kept, shipped and read by people who have no business holding it.
+        f"lpval {__version__} on http://{host}:{port}  rpc={rpc.describe()}  "
         f"paywall={'on' if paywall.enabled else 'off'}",
         flush=True,
     )

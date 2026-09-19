@@ -54,12 +54,21 @@ To charge for requests, add:
 
 Leave `LPVAL_PAY_TO` unset to run the API free, which is the sensible way to start.
 
-`LPVAL_RPC` is worth setting to an archive node. The fee rate behind every quote is then measured
-over the window the caller asked for, from the first request, instead of over the eight minutes of
-history a pruning node keeps. **It is a secret** when the provider puts an API key in the URL, as
-most do: it belongs in the service's variables and nowhere else. The client takes the endpoint back
-out of any error text before it reaches a caller, because a failed probe reports its reason on a
-public route.
+`LPVAL_RPC` takes a whitespace-separated list of endpoints, tried in order, each optionally carrying
+headers for providers that want the key there rather than in the path:
+
+```
+LPVAL_RPC="https://archive.example/v2/KEY  https://pool.example|x-api-key:KEY  https://public.example"
+```
+
+Put the most reliable archive node first: the fee rate behind every quote is then measured over the
+window the caller asked for, from the very first request, instead of over the eight minutes a
+pruning node keeps. The others are what it falls back to when the first is rate-limited, refusing
+the key, or simply down — a failover that lands in well under a second.
+
+**Every key is a secret, wherever the provider puts it.** These belong in the service's variables
+and nowhere else. The client strips all of them out of error text before it reaches a caller, since
+a failed probe reports its reason on a public route, and logs hostnames only.
 
 `PORT` is provided by the platform and the server binds every interface when it sees it. Locally it
 stays on loopback.

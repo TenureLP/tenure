@@ -107,6 +107,12 @@ the result is marked `lowConfidence`; a quote carries the same flag as `feeRateL
 fallback only ever shrinks the window — answering over more history than was asked for would answer
 a different question, and callers price deals on the answer.
 
+A historical read is retried against every endpoint before the window is allowed to shrink. "I
+cannot serve that state" is a fact about one node, not about the chain: a provider fronting a pool
+answers it from some of its nodes and not others. Measured on one of ours, the identical call
+succeeded nine times in twelve, so taking the first refusal at face value handed the same position
+a 24-hour rate or an eight-minute one depending on the draw — and a rent quoted off the difference.
+
 Every valuation also records a snapshot, which is what keeps a watchlist warm without an archive
 node:
 
@@ -120,7 +126,7 @@ in an hourly cron.
 
 | Variable | Default |
 |---|---|
-| `LPVAL_RPC` | `https://rpc.mainnet.chain.robinhood.com` — an archive node here improves the fee rate |
+| `LPVAL_RPC` | `https://rpc.mainnet.chain.robinhood.com` — one or more endpoints, see below |
 | `LPVAL_PAY_TO` | empty, paywall off |
 | `LPVAL_PRICE_WEI` | `1000000000000` |
 | `LPVAL_MIN_CONFIRMATIONS` | `3` |
@@ -129,6 +135,23 @@ in an hourly cron.
 
 Under WSL, put both databases outside `/mnt/c`, in `/tmp` or the Linux home: SQLite copes badly with
 that filesystem.
+
+### Several RPC endpoints
+
+`LPVAL_RPC` takes a whitespace-separated list. Entries are tried **in order**, and the ones after
+the first are what it falls back to. Each may carry headers, because providers disagree about where
+the key goes — a path segment for some, a header for others:
+
+```
+LPVAL_RPC="https://archive.example/v2/KEY  https://pool.example|x-api-key:KEY  https://public.example"
+```
+
+Order it deliberately. Endpoints are not spread round-robin: providers sit at slightly different
+heights, and a read at `latest` landing on a node a few blocks behind the one that just gave us a
+block number reads state that does not match it. Put the most reliable archive node first.
+
+**Every form of the key is a secret**, in the url or in a header. The client takes all of them back
+out of error text before it reaches a caller, and only hostnames are ever logged.
 
 ## Known limits
 

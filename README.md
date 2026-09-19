@@ -24,7 +24,9 @@ back at a price agreed upfront. **No debt is created at any point**, so there is
 liquidate and no oracle anywhere in the deal path. If the lessee does not buy back before the grace
 window closes, the financier simply takes delivery of the position they already own.
 
-`Tenure` is a working name. Nothing here is deployed, audited, or offered to anyone.
+`Tenure` is a working name. **No contract is deployed on any chain**, nothing here is audited, and
+none of it is offered to anyone. The two services run, read live chain state, and price positions;
+that is all they do.
 
 ## How a deal runs
 
@@ -58,8 +60,8 @@ Every payout is a balance the owed party withdraws. The vault has no owner and n
 | Folder | What it is | State |
 |---|---|---|
 | [`lease-vault/`](lease-vault) | The contracts. `LeaseVault` is ownerless; `AssetRegistry` holds the policy and is read only at listing. | 39 tests, 5 against live chain state |
-| [`lp-api/`](lp-api) | Position valuation over JSON-RPC, exact integer maths, behind an HTTP 402 gate that speaks x402 v2. | 45 tests, runs against mainnet |
-| [`landing/`](landing) | Static page and its signup endpoint. | works, not deployed |
+| [`lp-api/`](lp-api) | Position valuation over JSON-RPC, exact integer maths, behind an HTTP 402 gate that speaks x402 v2. | 63 tests, deployed, reads mainnet |
+| [`landing/`](landing) | Static page and its signup endpoint. | deployed |
 | [`brand/`](brand) | Logo, banner, teaser, all generated from one script. | done |
 
 ## Run everything

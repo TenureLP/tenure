@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+import urllib.error
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "landing"))
@@ -244,6 +245,125 @@ class RpcTest(unittest.TestCase):
         rpc = Rpc("https://rpc.mainnet.chain.robinhood.com")
         self.assertEqual(rpc.scrub("HTTP 500 from the node"), "HTTP 500 from the node")
 
+    def test_a_key_carried_in_a_header_is_also_scrubbed(self):
+        """Providers split on where the secret goes. One puts it in the path, the next wants a
+        header, and both end up quoted back in somebody's error message."""
+        rpc = Rpc("https://node.example|x-api-key:ORBIT-HEADER-SECRET-0000")
+        self.assertNotIn("ORBIT-HEADER-SECRET-0000", rpc.scrub("refused: key ORBIT-HEADER-SECRET-0000"))
+
+    def test_what_may_be_logged_is_hosts_only(self):
+        rpc = Rpc("https://a.example/v2/PATHSECRET12345  https://b.example|x-api-key:HEADERSECRET12345")
+        said = rpc.describe()
+        self.assertEqual(said, "a.example, b.example")
+        for secret in ("PATHSECRET12345", "HEADERSECRET12345"):
+            self.assertNotIn(secret, said)
+
+    def test_headers_reach_the_endpoint_that_asked_for_them(self):
+        rpc = Rpc("https://a.example/v2/K  https://b.example|x-api-key:SECRET-VALUE-123")
+        self.assertEqual(rpc.endpoints[0].headers, {})
+        self.assertEqual(rpc.endpoints[1].headers, {"x-api-key": "SECRET-VALUE-123"})
+
+    def test_a_malformed_header_is_refused_rather_than_ignored(self):
+        # Silently dropping it would mean an endpoint that quietly 401s on every call.
+        with self.assertRaises(ValueError):
+            Rpc("https://a.example|x-api-key")
+
+
+class FailoverTest(unittest.TestCase):
+    """Several endpoints exist so that one of them being unhappy is not an outage."""
+
+    @staticmethod
+    def _rpc(behaviour):
+        rpc = Rpc("https://a.example  https://b.example")
+        seen = []
+
+        def fake_post_once(payload, endpoint):
+            seen.append(endpoint.label)
+            return behaviour(endpoint.label, payload)
+
+        rpc._post_once = fake_post_once
+        return rpc, seen
+
+    @staticmethod
+    def _http_error(code):
+        return urllib.error.HTTPError("https://a.example", code, "nope", {}, None)
+
+    def test_a_bad_key_on_one_endpoint_does_not_fail_the_read(self):
+        def behaviour(label, payload):
+            if label == "a.example":
+                raise FailoverTest._http_error(401)
+            return {"jsonrpc": "2.0", "id": payload["id"], "result": "0x1237"}
+
+        rpc, seen = self._rpc(behaviour)
+        self.assertEqual(rpc.request("eth_chainId", []), "0x1237")
+        self.assertEqual(seen, ["a.example", "b.example"])
+
+    def test_an_endpoint_that_refused_us_is_not_asked_again(self):
+        """401 says something about our key, not about the weather. Repeating it wastes the budget
+        the deadline is there to protect."""
+
+        def behaviour(label, payload):
+            raise FailoverTest._http_error(401)
+
+        rpc, seen = self._rpc(behaviour)
+        with self.assertRaises(UpstreamError):
+            rpc.request("eth_chainId", [])
+        self.assertEqual(sorted(seen), ["a.example", "b.example"])
+
+    def test_a_rate_limit_is_worth_asking_about_again(self):
+        state = {"n": 0}
+
+        def behaviour(label, payload):
+            state["n"] += 1
+            if state["n"] < 3:
+                raise FailoverTest._http_error(429)
+            return {"jsonrpc": "2.0", "id": payload["id"], "result": "0x1"}
+
+        rpc, seen = self._rpc(behaviour)
+        self.assertEqual(rpc.request("eth_blockNumber", []), "0x1")
+        self.assertEqual(len(seen), 3)
+
+    def test_persist_asks_elsewhere_when_a_node_cannot_serve_the_state(self):
+        """The finding that motivated this: the same historical call against one provider succeeded
+        nine times in twelve, because it fronts a pool and only some of its nodes keep the state.
+        Taking the first refusal as final made the fee rate, and so the rent, a coin toss."""
+
+        def behaviour(label, payload):
+            if label == "a.example":
+                return [
+                    {"id": p["id"], "error": {"code": -32000, "message": "historical state unavailable"}}
+                    for p in payload
+                ]
+            return [{"id": p["id"], "result": "0x" + "11" * 32} for p in payload]
+
+        rpc, seen = self._rpc(behaviour)
+        out = rpc.eth_calls([("0xabc", "0xdead")], block=123, persist=True)
+        self.assertEqual(out[0], bytes.fromhex("11" * 32))
+        self.assertIn("b.example", seen)
+
+    def test_without_persist_one_refusal_is_final(self):
+        def behaviour(label, payload):
+            return [
+                {"id": p["id"], "error": {"code": -32000, "message": "historical state unavailable"}}
+                for p in payload
+            ]
+
+        rpc, seen = self._rpc(behaviour)
+        with self.assertRaises(UpstreamError):
+            rpc.eth_calls([("0xabc", "0xdead")], block=123)
+        self.assertEqual(seen, ["a.example"])
+
+    def test_a_revert_is_still_not_an_outage(self):
+        """The whole point of the client. Failover must not blur it."""
+
+        def behaviour(label, payload):
+            return [{"id": p["id"], "error": {"code": 3, "message": "execution reverted"}} for p in payload]
+
+        rpc, seen = self._rpc(behaviour)
+        out = rpc.eth_calls([("0xabc", "0xdead")], block="latest")
+        self.assertIs(out[0], REVERTED)
+        self.assertEqual(seen, ["a.example"])
+
 
 class QuoteTest(unittest.TestCase):
     """The vault refuses a listing whose price or rent is zero. A quote that cannot produce both is
@@ -309,7 +429,7 @@ class FeeWindowTest(unittest.TestCase):
         def block_timestamp(self, block):
             return block // 10  # 100 ms blocks
 
-        def eth_calls(self, calls, block):
+        def eth_calls(self, calls, block, persist=False):
             self.asked.append(block)
             if self.HEAD - block > self.depth:
                 raise RuntimeError("missing trie node")
