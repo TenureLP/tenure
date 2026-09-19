@@ -8,7 +8,7 @@ import {IERC20} from "../src/interfaces/IERC20.sol";
 import {IPositionManager} from "../src/interfaces/IPositionManager.sol";
 import {IStateView} from "../src/interfaces/IStateView.sol";
 import {Currency, PoolKey, PoolIdLib, PoolId} from "../src/libraries/Types.sol";
-import {MockERC20, MockPausableERC20} from "./mocks/MockERC20.sol";
+import {MockERC20, MockPausableERC20, MockReturnBombERC20} from "./mocks/MockERC20.sol";
 import {MockPositionManager} from "./mocks/MockPositionManager.sol";
 import {MockStateView} from "./mocks/MockStateView.sol";
 
@@ -58,7 +58,7 @@ contract LeaseVaultTest is MiniTest {
         key = PoolKey(Currency.wrap(c0), Currency.wrap(c1), 3000, 60, address(0));
         poolId = PoolId.unwrap(key.toId());
 
-        registry.setPool(poolId, true, 1, 1_000, keccak256("screening-v1"));
+        registry.setPool(poolId, true, 1, 1, 1_000, keccak256("screening-v1"));
         registry.setTerm(TERM, true);
         registry.setListingFee(FEE);
         stateView.setTick(poolId, 0);
@@ -104,7 +104,7 @@ contract LeaseVaultTest is MiniTest {
     }
 
     function test_list_rejectsPoolNotAllowed() public {
-        registry.setPool(poolId, false, 0, 0, bytes32(0));
+        registry.setPool(poolId, false, 0, 0, 0, bytes32(0));
         vm.prank(seller);
         vm.expectRevert(LeaseVault.PoolNotAllowed.selector);
         vault.list(tokenId, PRICE, RENT, BUYBACK, TERM, 1 days);
@@ -234,11 +234,15 @@ contract LeaseVaultTest is MiniTest {
         vm.warp(block.timestamp + 1 days);
         stock.setPaused(true);
         vault.checkpointFreeze(id);
-        vm.warp(block.timestamp + 2 days);
+        // A freeze only counts while somebody keeps observing it, so a keeper checks in every 6 h.
+        for (uint256 i; i < 8; ++i) {
+            vm.warp(block.timestamp + 6 hours);
+            vault.checkpointFreeze(id);
+        }
         stock.setPaused(false);
         vault.checkpointFreeze(id);
         vm.warp(block.timestamp + 4 days); // day 7: 5 usable days
-        assertEq(uint256(vault.accruedRent(id)),5_000_000);
+        assertEq(uint256(vault.accruedRent(id)), 5_000_000);
 
         // Frozen time is refunded to the lessee at settlement.
         vm.warp(block.timestamp + GRACE);
@@ -246,6 +250,58 @@ contract LeaseVaultTest is MiniTest {
         vault.release(id);
         assertEq(vault.balances(financier), 5_000_000);
         assertEq(vault.balances(seller), PRICE - RENT - FEE + 2_000_000);
+    }
+
+    /// An unobserved freeze cannot run forever: whoever opens it must keep proving it is still there.
+    /// Without this, one call during a one-second halt would stop the rent for the rest of the term.
+    function test_rent_unobservedFreezeStopsCountingAfterMaxGap() public {
+        uint256 id = _listAndFund();
+        vm.warp(block.timestamp + 1 days);
+        stock.setPaused(true);
+        vault.checkpointFreeze(id); // opened, and never looked at again
+        stock.setPaused(false); // the halt lasted an instant
+        vm.warp(block.timestamp + 6 days);
+
+        // Only the 6 hours after the sighting are credited, not the six days.
+        uint256 gap = vault.MAX_FREEZE_GAP();
+        assertEq(uint256(vault.accruedRent(id)), RENT - uint128(uint256(RENT) * gap / TERM));
+        vault.checkpointFreeze(id); // closing it later cannot recover the lost time either
+        assertEq(uint256(vault.deal(id).pausedTotal), gap);
+    }
+
+    /// A token that answers the freeze probe with megabytes must not be able to brick a deal.
+    function test_rent_returnBombCannotBrickTheDeal() public {
+        MockReturnBombERC20 bomb = new MockReturnBombERC20();
+        (address c0, address c1) =
+            address(bomb) < address(usdg) ? (address(bomb), address(usdg)) : (address(usdg), address(bomb));
+        PoolKey memory bombKey = PoolKey(Currency.wrap(c0), Currency.wrap(c1), 3000, 60, address(0));
+        bytes32 bombPool = PoolId.unwrap(bombKey.toId());
+        registry.setPool(bombPool, true, 1, 1, 1_000, bytes32(0));
+        stateView.setTick(bombPool, 0);
+        uint256 bombToken = posm.mint(seller, bombKey, -600, 600, 10_000);
+        vm.prank(seller);
+        posm.approve(address(vault), bombToken);
+
+        vm.prank(seller);
+        uint256 id = vault.list(bombToken, PRICE, RENT, BUYBACK, TERM, 1 days);
+        vm.prank(financier);
+        vault.fund(id);
+
+        // Every entry point still fits in a normal gas budget. The probe itself is starved by its
+        // own stipend and reports nothing, which costs the financier nothing and the lessee nothing:
+        // what matters is that the deal can still be settled and the position still comes out.
+        vm.warp(block.timestamp + 1 days);
+        vault.checkpointFreeze{gas: 400_000}(id);
+        vm.prank(seller);
+        vault.collectFees{gas: 400_000}(id);
+        vault.claimRent{gas: 400_000}(id);
+
+        vm.warp(block.timestamp + TERM + GRACE);
+        vm.prank(financier);
+        vault.release{gas: 400_000}(id);
+        vm.prank(financier);
+        vault.withdrawPosition(bombToken);
+        assertEq(posm.ownerOf(bombToken), financier);
     }
 
     function test_rent_frozenAcrossLeaseEndIsBounded() public {
@@ -256,7 +312,8 @@ contract LeaseVaultTest is MiniTest {
         vm.warp(block.timestamp + 5 days); // well past the term
         stock.setPaused(false);
         vault.checkpointFreeze(id);
-        assertEq(uint256(vault.accruedRent(id)),6_000_000);
+        // The freeze started on day 6 and is capped at 6 h, so 6 days and 18 hours are billable.
+        assertEq(uint256(vault.accruedRent(id)), RENT - uint128(uint256(RENT) * 6 hours / TERM));
     }
 
     // ------------------------------------------------------------------ buyback

@@ -60,3 +60,29 @@ contract MockPausableERC20 is MockERC20 {
         super._move(from, to, amount);
     }
 }
+
+/// @dev A token whose `paused()` answers with an enormous blob. Before the vault bounded its probe,
+///      copying that blob cost quadratic memory and pushed every entry point of a deal over the
+///      block gas limit, stranding the position forever.
+contract MockReturnBombERC20 is MockERC20 {
+    uint256 public words = 100_000;
+
+    constructor() MockERC20("Bomb", "BOMB", 18) {}
+
+    function setWords(uint256 n) external {
+        words = n;
+    }
+
+    fallback() external {
+        // paused()
+        if (msg.sig == 0x5c975abb) {
+            uint256 n = words;
+            assembly {
+                let size := mul(n, 0x20)
+                let ptr := mload(0x40)
+                mstore(add(ptr, size), 0)
+                return(ptr, size)
+            }
+        }
+    }
+}

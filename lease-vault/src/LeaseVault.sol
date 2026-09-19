@@ -61,14 +61,23 @@ contract LeaseVault {
         uint128 buybackPrice; // price at which the financier promises to sell back
         uint128 listingFee; // flat protocol fee snapshotted at listing
         uint128 rentClaimed; // rent already credited to the financier
+        address feeRecipient; // snapshotted at listing, like every other registry input
         uint32 term;
         uint32 grace;
         uint40 listingExpiry;
         uint40 fundedAt;
         uint40 pausedSince; // non-zero while a freeze of the underlying is recorded
+        uint40 pausedSeenAt; // last instant the freeze was actually observed
         uint40 pausedTotal; // cumulative frozen seconds already closed
+        uint8 freezeProbe; // how to ask the pair whether it is frozen, from the registry
         State state;
     }
+
+    /// @notice Longest stretch of frozen time credited beyond the last observation.
+    /// @dev Without this, anyone could open a freeze during a one-second halt, never close it, and
+    ///      stop the rent for the rest of the term. Both sides are cheaply able to keep the record
+    ///      honest by calling `checkpointFreeze`; what nobody can do is let it drift one way.
+    uint40 public constant MAX_FREEZE_GAP = 6 hours;
 
     // ---------------------------------------------------------------------
     // Immutables / storage
@@ -171,14 +180,16 @@ contract LeaseVault {
         return _accrued(d);
     }
 
+    /// @return 0 while the deal has not been funded, since there is no lease to end yet.
     function leaseEnd(uint256 dealId) public view returns (uint40) {
         Deal storage d = _deals[dealId];
-        return d.fundedAt + d.term;
+        return d.fundedAt == 0 ? 0 : d.fundedAt + d.term;
     }
 
+    /// @return 0 while the deal has not been funded.
     function graceEnd(uint256 dealId) public view returns (uint40) {
         Deal storage d = _deals[dealId];
-        return d.fundedAt + d.term + d.grace;
+        return d.fundedAt == 0 ? 0 : d.fundedAt + d.term + d.grace;
     }
 
     // ---------------------------------------------------------------------
@@ -204,11 +215,15 @@ contract LeaseVault {
         if (!registry.isTermAllowed(term)) revert TermNotAllowed();
         if (listingDuration == 0 || listingDuration > registry.maxListingDuration()) revert BadListingDuration();
         uint128 fee = registry.listingFee();
-        if (price == 0 || uint256(rent) + fee >= price) revert BadEconomics();
+        // A lease with no rent, or a buyback promise worth nothing, is not the contract this vault
+        // claims to settle. Both sides must give something.
+        if (price == 0 || rent == 0 || buybackPrice == 0 || uint256(rent) + fee >= price) revert BadEconomics();
 
         dealId = ++dealCount;
         Deal storage d = _deals[dealId];
-        (d.poolId, d.currency0, d.currency1) = _checkEligible(tokenId);
+        uint8 probe;
+        (d.poolId, d.currency0, d.currency1, probe) = _checkEligible(tokenId);
+        d.freezeProbe = probe;
 
         posm.transferFrom(msg.sender, address(this), tokenId);
         if (posm.ownerOf(tokenId) != address(this)) revert PositionNotHeld();
@@ -219,6 +234,7 @@ contract LeaseVault {
         d.rent = rent;
         d.buybackPrice = buybackPrice;
         d.listingFee = fee;
+        d.feeRecipient = registry.feeRecipient();
         d.term = term;
         d.grace = registry.grace();
         d.listingExpiry = uint40(block.timestamp + listingDuration);
@@ -228,16 +244,28 @@ contract LeaseVault {
     }
 
     /// @dev Admission checks: allowlisted pool, no subscriber, enough liquidity, in range.
-    function _checkEligible(uint256 tokenId) private view returns (bytes32 poolId, Currency c0, Currency c1) {
+    function _checkEligible(uint256 tokenId)
+        private
+        view
+        returns (bytes32 poolId, Currency c0, Currency c1, uint8 freezeProbe)
+    {
         (PoolKey memory key, uint256 info) = posm.getPoolAndPositionInfo(tokenId);
         poolId = PoolId.unwrap(key.toId());
         AssetRegistry.PoolConfig memory cfg = registry.poolConfig(poolId);
         if (!cfg.allowed) revert PoolNotAllowed();
         if (info.hasSubscriber()) revert HasSubscriber();
         if (posm.getPositionLiquidity(tokenId) < cfg.minLiquidity) revert LiquidityTooLow();
+        _requireInRange(tokenId, poolId);
+        return (poolId, key.currency0, key.currency1, cfg.freezeProbe);
+    }
+
+    /// @dev A position out of range earns nothing, so it is neither worth leasing nor worth buying.
+    ///      Checked again at funding: a spot tick is cheap to nudge for one block, expensive to hold
+    ///      across the whole listing window.
+    function _requireInRange(uint256 tokenId, bytes32 poolId) private view {
+        (, uint256 info) = posm.getPoolAndPositionInfo(tokenId);
         (, int24 tick,,) = stateView.getSlot0(poolId);
         if (tick < info.tickLower() || tick >= info.tickUpper()) revert OutOfRange();
-        return (poolId, key.currency0, key.currency1);
     }
 
     function _emitListed(uint256 dealId) private {
@@ -269,6 +297,12 @@ contract LeaseVault {
         if (d.state != State.Listed) revert NotListed();
         if (block.timestamp > d.listingExpiry) revert ListingExpired();
         if (msg.sender == d.seller) revert SelfDeal();
+        // Admission is re-checked here, not only at listing: a listing stays open for days, and in
+        // that window the committee may revoke the pool or the position may drift out of range.
+        // Re-reading cannot harm an active deal, because an active deal never reaches this line.
+        if (registry.listingsPaused()) revert ListingsPaused();
+        if (!registry.poolConfig(d.poolId).allowed) revert PoolNotAllowed();
+        _requireInRange(d.tokenId, d.poolId);
 
         usdg.safeTransferFrom(msg.sender, address(this), d.price);
 
@@ -278,7 +312,7 @@ contract LeaseVault {
 
         // Sale proceeds to the seller, net of the prepaid rent and the flat fee.
         balances[d.seller] += uint256(d.price) - d.rent - d.listingFee;
-        balances[registry.feeRecipient()] += d.listingFee;
+        balances[d.feeRecipient] += d.listingFee;
         // The rent stays in the vault as escrow and streams to the financier.
 
         _checkpoint(d, dealId);
@@ -365,7 +399,8 @@ contract LeaseVault {
         Deal storage d = _deals[dealId];
         if (d.state != State.Active) revert NotActive();
         if (msg.sender != d.financier) revert NotFinancier();
-        if (to == address(0)) revert ZeroAddress();
+        // The vault itself would be a black hole: nobody could ever call release or withdraw.
+        if (to == address(0) || to == address(this)) revert ZeroAddress();
         if (to == d.seller) revert SelfDeal();
         _checkpoint(d, dealId);
         // Settle accrued rent to the outgoing financier first.
@@ -381,7 +416,7 @@ contract LeaseVault {
     }
 
     /// @notice Record a freeze / unfreeze of the underlying token. Callable by anyone (keepers).
-    function checkpointFreeze(uint256 dealId) external {
+    function checkpointFreeze(uint256 dealId) external nonReentrant {
         Deal storage d = _deals[dealId];
         if (d.state != State.Active) revert NotActive();
         _checkpoint(d, dealId);
@@ -416,36 +451,73 @@ contract LeaseVault {
         return block.timestamp >= end ? end : uint40(block.timestamp);
     }
 
+    /// @dev Seconds of the open freeze that count, capped at MAX_FREEZE_GAP past the last sighting.
+    function _openFreeze(Deal storage d, uint40 t) private view returns (uint256) {
+        if (d.pausedSince == 0) return 0;
+        uint40 horizon = d.pausedSeenAt + MAX_FREEZE_GAP;
+        uint40 until = t < horizon ? t : horizon;
+        return until <= d.pausedSince ? 0 : until - d.pausedSince;
+    }
+
     /// @dev Rent accrues only for usable seconds: elapsed minus recorded frozen time.
     function _accrued(Deal storage d) private view returns (uint128) {
         uint40 t = _clampedNow(d);
-        uint256 usable = uint256(t - d.fundedAt) - d.pausedTotal - (d.pausedSince != 0 ? (t - d.pausedSince) : 0);
+        uint256 usable = uint256(t - d.fundedAt) - d.pausedTotal - _openFreeze(d, t);
         return uint128(uint256(d.rent) * usable / d.term);
     }
 
+    /// @dev Records the freeze state at this instant. Anyone may call it, and both sides want to:
+    ///      the lessee to open a freeze, the financier to close one. What neither can do is leave a
+    ///      stale record standing, because an open freeze only counts up to MAX_FREEZE_GAP past the
+    ///      last time it was actually seen.
     function _checkpoint(Deal storage d, uint256 dealId) private {
         uint40 t = _clampedNow(d);
-        bool frozen = _isFrozen(d);
-        if (frozen) {
+        if (_isFrozen(d)) {
             if (d.pausedSince == 0) {
                 d.pausedSince = t;
+                d.pausedSeenAt = t;
                 emit FreezeCheckpoint(dealId, true, d.pausedTotal);
+            } else if (t > d.pausedSeenAt) {
+                // Extend only from the previous sighting, never across an unobserved gap.
+                uint40 horizon = d.pausedSeenAt + MAX_FREEZE_GAP;
+                if (t > horizon) d.pausedSince = d.pausedSince + (t - horizon);
+                d.pausedSeenAt = t;
             }
         } else if (d.pausedSince != 0) {
-            d.pausedTotal += t - d.pausedSince;
+            d.pausedTotal += uint40(_openFreeze(d, t));
             d.pausedSince = 0;
+            d.pausedSeenAt = 0;
             emit FreezeCheckpoint(dealId, false, d.pausedTotal);
         }
     }
 
-    /// @dev Best-effort detection of an issuer / regulator freeze on either side of the pair.
+    /// @dev Whether the pair is frozen, using the probe the registry recorded for this pool.
+    ///      Probe 0 means the committee found no freeze signal worth reading on this pair.
     function _isFrozen(Deal storage d) private view returns (bool) {
+        if (d.freezeProbe == 0) return false;
         return _paused(Currency.unwrap(d.currency0)) || _paused(Currency.unwrap(d.currency1));
     }
 
+    /// @dev `paused()` under a fixed gas stipend, copying at most one word back.
+    ///      A plain `staticcall` into `bytes memory` would let a token return megabytes and charge
+    ///      this contract quadratic memory expansion for them, which would make every entry point of
+    ///      an active deal exceed the block gas limit and strand the position forever.
+    ///      A probe that answers in the wrong shape is treated as FROZEN: the committee asserted the
+    ///      shape when it allowlisted the pool, so an unreadable answer must not silently mean "fine".
     function _paused(address token) private view returns (bool) {
-        if (token == address(0)) return false; // native currency
-        (bool ok, bytes memory ret) = token.staticcall(abi.encodeWithSignature("paused()"));
-        return ok && ret.length == 32 && abi.decode(ret, (uint256)) == 1;
+        if (token == address(0)) return false; // native currency has no issuer to freeze it
+        bool ok;
+        uint256 word;
+        uint256 size;
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, 0x5c975abb00000000000000000000000000000000000000000000000000000000) // paused()
+            ok := staticcall(30000, token, ptr, 4, 0x00, 0x20)
+            size := returndatasize()
+            word := mload(0x00)
+        }
+        if (!ok) return false; // no such function: this token has no freeze switch
+        if (size != 32) return true; // answered, but not in the shape we were told to expect
+        return word == 1;
     }
 }

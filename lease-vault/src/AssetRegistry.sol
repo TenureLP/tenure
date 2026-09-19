@@ -15,6 +15,12 @@ contract AssetRegistry {
     struct PoolConfig {
         bool allowed;
         uint8 assetClass;
+        /// @dev How the vault should ask this pair whether it is frozen.
+        ///      0 = do not ask, neither token has a freeze switch worth reading.
+        ///      1 = call `paused()` and read one word, 1 meaning frozen.
+        ///      Set it only after checking what the tokens actually return: with probe 1, an answer
+        ///      in any other shape is read as frozen and stops the rent.
+        uint8 freezeProbe;
         uint128 minLiquidity;
         bytes32 screeningRef; // e.g. hash of the asset screening report for this pair
     }
@@ -52,7 +58,9 @@ contract AssetRegistry {
     // Events / errors
     // ---------------------------------------------------------------------
 
-    event PoolSet(bytes32 indexed poolId, bool allowed, uint8 assetClass, uint128 minLiquidity, bytes32 screeningRef);
+    event PoolSet(
+        bytes32 indexed poolId, bool allowed, uint8 assetClass, uint8 freezeProbe, uint128 minLiquidity, bytes32 screeningRef
+    );
     event TermSet(uint32 term, bool allowed);
     event GraceSet(uint32 grace);
     event MaxListingDurationSet(uint32 duration);
@@ -69,6 +77,7 @@ contract AssetRegistry {
     error BadDuration();
     error FeeAboveCap();
     error ZeroAddress();
+    error BadProbe();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -99,17 +108,23 @@ contract AssetRegistry {
     // Owner actions
     // ---------------------------------------------------------------------
 
-    function setPool(bytes32 poolId, bool allowed, uint8 assetClass, uint128 minLiquidity, bytes32 screeningRef)
-        external
-        onlyOwner
-    {
+    function setPool(
+        bytes32 poolId,
+        bool allowed,
+        uint8 assetClass,
+        uint8 freezeProbe,
+        uint128 minLiquidity,
+        bytes32 screeningRef
+    ) external onlyOwner {
+        if (freezeProbe > 1) revert BadProbe();
         _pools[poolId] = PoolConfig({
             allowed: allowed,
             assetClass: assetClass,
+            freezeProbe: freezeProbe,
             minLiquidity: minLiquidity,
             screeningRef: screeningRef
         });
-        emit PoolSet(poolId, allowed, assetClass, minLiquidity, screeningRef);
+        emit PoolSet(poolId, allowed, assetClass, freezeProbe, minLiquidity, screeningRef);
     }
 
     function setTerm(uint32 term, bool allowed) external onlyOwner {

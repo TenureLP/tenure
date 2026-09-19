@@ -48,7 +48,7 @@ contract InvariantsTest is MiniTest {
 
         (address c0, address c1) = address(stock) < address(usdg) ? (address(stock), address(usdg)) : (address(usdg), address(stock));
         key = PoolKey(Currency.wrap(c0), Currency.wrap(c1), 3000, 60, address(0));
-        registry.setPool(PoolId.unwrap(key.toId()), true, 1, 1_000, bytes32(0));
+        registry.setPool(PoolId.unwrap(key.toId()), true, 1, 1, 1_000, bytes32(0));
         registry.setTerm(TERM, true);
         registry.setListingFee(FEE);
         stateView.setTick(PoolId.unwrap(key.toId()), 0);

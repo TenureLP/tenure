@@ -44,7 +44,7 @@ contract VaultForkTest is MiniTest {
 
         registry = new AssetRegistry(address(this), address(0xFEE), 5_000_000);
         vault = new LeaseVault(USDG, POSM, STATE_VIEW, registry);
-        registry.setPool(PoolId.unwrap(key.toId()), true, 2, 1, bytes32(0));
+        registry.setPool(PoolId.unwrap(key.toId()), true, 2, 1, 1, bytes32(0));
         registry.setTerm(TERM, true);
 
         // Fund both parties with real USDG taken from the PoolManager's balance (fork only).
