@@ -1,5 +1,35 @@
 # The token
 
+## What is live
+
+**TEN**, at [`0x4bA94fB1D3fDF414afdc955CD29836016eDF3531`](https://robinhoodchain.blockscout.com/address/0x4bA94fB1D3fDF414afdc955CD29836016eDF3531)
+on Robinhood Chain. One billion units, eighteen decimals, launched on the Pons bonding curve.
+
+It was **created by the Pons launchpad from its own template**, not from `TenureToken.sol` in this
+repository. That file is a reference and a test, and it is not what is deployed. Saying so matters
+more than the tidiness of pretending otherwise.
+
+What was checked against the deployed contract, and what anybody can check again:
+
+```bash
+cd lease-vault && ./check-token.sh
+```
+
+It asks the contract for twenty-four selectors — ownership, minting, pausing, blacklisting, taxing,
+trading gates, upgrading — and reports which it answers. **It answers none of them.** The script
+defaults to the public RPC, so repeating it needs no key and no trust in this file.
+
+Also read from the chain at launch: the deploying address holds **zero** TEN. There was no developer
+buy in the launch transaction, which is the thing to look at first on any bonding-curve launch and
+the thing a screenshot of a website cannot tell you.
+
+## What follows
+
+Everything below describes `TenureToken.sol`, the contract in this repository. The live token is not
+that contract, but it was held to the same test, which is the only reason its properties can be
+stated here at all.
+
+
 `TenureToken` is a fixed-supply ERC-20 with no owner, no minter, no pause, no blacklist, no fee on
 transfer and no upgrade path. The whole supply exists after the constructor and can only fall,
 because holders may burn their own balance. That is the entire contract, and the emptiness is the

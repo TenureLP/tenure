@@ -94,7 +94,7 @@ cd lp-api && ./run.sh position 2908278 --quote
 | [Contracts](lease-vault/README.md) | The blocker on tokenised stocks, the addresses, how to deploy |
 | [API](lp-api/README.md) | Routes, the payment handshake, the fee-rate snapshots |
 | [Paying for the API](docs/OLANAS.md) | The x402 handshake in full, and how it lines up with Olanas |
-| [The token](docs/TOKEN.md) | What it is, what it is not, and what would have to be built to give it a purpose |
+| [The token](docs/TOKEN.md) | TEN: the deployed address, the twenty-four powers it does not have, and what would have to be built to give it a purpose |
 
 ## What holds, and what does not
 

@@ -4,6 +4,15 @@ pragma solidity ^0.8.26;
 /// @title TenureToken
 /// @notice A fixed-supply ERC-20. Everything that could be used against a holder was left out.
 ///
+/// @dev **This is not the token that was launched.** TEN, at
+///      0x4bA94fB1D3fDF414afdc955CD29836016eDF3531 on Robinhood Chain, was created by the Pons
+///      launchpad from its own template, not from this file. That contract was checked against the
+///      same list of privileged selectors this one is tested against and answers none of them; see
+///      docs/TOKEN.md for what was verified and how to repeat it.
+///
+///      This file stays because the test beside it is the definition of what a token here is
+///      allowed to be, and because anything deployed later should have to pass it.
+///
 /// @dev There is no owner, no minter, no pause, no blacklist, no fee on transfer, no upgrade path
 ///      and no hook that a later contract could be pointed at. The whole supply exists after the
 ///      constructor and can only ever go down, because holders may burn their own balance.
