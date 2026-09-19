@@ -31,3 +31,4 @@ brand/video/stills/
 .env
 .env.*
 !.env.example
+.claude/
