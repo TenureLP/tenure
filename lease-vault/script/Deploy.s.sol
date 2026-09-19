@@ -15,8 +15,8 @@ interface VmScript {
 }
 
 /// @notice Deploys the registry and the vault on Robinhood Chain (4663).
-/// @dev Canonical addresses on Robinhood Chain mainnet as published on the Gage address page and
-///      the Uniswap deployment there. Re-verify on the explorer before broadcasting.
+/// @dev Canonical addresses on Robinhood Chain mainnet. Confirm every one of them with
+///      ../verify-addresses.sh before broadcasting: a young chain redeploys its infrastructure.
 ///      The deployed addresses are printed by forge as the return values of run().
 contract Deploy {
     VmScript internal constant vm = VmScript(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
