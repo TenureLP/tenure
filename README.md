@@ -93,6 +93,7 @@ cd lp-api && ./run.sh position 2908278 --quote
 | [Deploying](docs/DEPLOY.md) | The two services, their variables, and why the paywall refuses to start without a durable disk |
 | [Contracts](lease-vault/README.md) | The blocker on tokenised stocks, the addresses, how to deploy |
 | [API](lp-api/README.md) | Routes, the payment handshake, the fee-rate snapshots |
+| [Paying for the API](docs/OLANAS.md) | The x402 handshake in full, and how it lines up with Olanas |
 
 ## What holds, and what does not
 

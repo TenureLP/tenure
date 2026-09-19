@@ -1,0 +1,441 @@
+openapi: 3.1.0
+
+info:
+  title: Tenure position valuation
+  version: 0.1.0
+  summary: Prices a Uniswap v4 liquidity position on Robinhood Chain, behind an HTTP 402 gate.
+  description: |
+    Reads a Uniswap v4 position from chain state and returns what it holds, what it has earned, and
+    indicative sale-and-leaseback terms for it. All arithmetic is exact integer arithmetic; no
+    floating point is used anywhere a value is derived.
+
+    **Payment.** When a price is configured the service answers `402` with an x402 version 2
+    envelope and settles proofs itself. The scheme, the headers and the chain are the ones Olanas
+    uses, so a client written for one works against the other. The policy inside the envelope is
+    stricter in one respect, and deliberately: a transaction hash is public the moment it is mined,
+    so a hash on its own would be a bearer token. This service also requires a nonce it issued and
+    a signature from the paying account over the exact resource. A client that ignores
+    `accepts[0].extra` fails closed.
+
+    Run free by leaving `LPVAL_PAY_TO` unset, which is how the public deployment runs today: every
+    route answers `200` with no payment at all.
+  license:
+    name: MIT
+  contact:
+    name: Source and issues
+    url: https://github.com/TenureLP/tenure
+
+servers:
+  - url: https://api-production-9e87.up.railway.app
+    description: Public deployment, running free. Reads Robinhood Chain mainnet (4663).
+  - url: http://127.0.0.1:8402
+    description: Local, from `./run.sh serve`.
+
+tags:
+  - name: Positions
+    description: Valuation and indicative terms.
+  - name: Service
+    description: Liveness and machine-readable description.
+
+paths:
+  /health:
+    get:
+      tags: [Service]
+      summary: Liveness, chain and whether a payment is required
+      description: Never priced, so a monitor never has to hold funds.
+      operationId: getHealth
+      responses:
+        "200":
+          description: The service is up.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example:
+                ok: true
+                version: "0.1.0"
+                chainId: 4663
+                paywall: false
+
+  /openapi.yaml:
+    get:
+      tags: [Service]
+      summary: This document
+      description: Served by the running instance, so the description can never drift from the build.
+      operationId: getOpenApiYaml
+      responses:
+        "200":
+          description: This document, as YAML.
+          content:
+            application/yaml:
+              schema: { type: string }
+
+  /v1/position/{tokenId}:
+    get:
+      tags: [Positions]
+      summary: Value a position
+      description: |
+        Reads the position and its pool at the chain head and returns the amounts it holds, the fees
+        it has not collected, its USDG value when USDG is one of the pair, and the rate its range
+        has been earning at.
+      operationId: getPosition
+      parameters:
+        - $ref: "#/components/parameters/TokenId"
+        - $ref: "#/components/parameters/LookbackHours"
+        - $ref: "#/components/parameters/PaymentSignature"
+      responses:
+        "200":
+          description: The position, priced.
+          headers:
+            PAYMENT-RESPONSE:
+              description: Base64 receipt for the payment that bought this response. Absent when free.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Valuation" }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/UpstreamError" }
+        "503": { $ref: "#/components/responses/Busy" }
+
+  /v1/position/{tokenId}/quote:
+    get:
+      tags: [Positions]
+      summary: Value a position and propose terms for it
+      description: |
+        Everything `/v1/position/{tokenId}` returns, plus a `quote`: an indicative sale price, a
+        buyback at the same figure, and a rent derived from the fees the position actually earned
+        over the requested window.
+
+        The quote is unavailable, with a reason, when the position holds no liquidity or when the
+        fee rate is not usable. Both would otherwise produce terms the vault rejects at listing, and
+        an answer a caller could act on is worth more than a number that reverts.
+      operationId: getPositionQuote
+      parameters:
+        - $ref: "#/components/parameters/TokenId"
+        - $ref: "#/components/parameters/LookbackHours"
+        - name: term
+          in: query
+          description: Lease length in days.
+          schema: { type: integer, minimum: 1, maximum: 30, default: 7 }
+        - name: haircut
+          in: query
+          description: Discount applied to market value to reach the sale price.
+          schema: { type: number, minimum: 0, maximum: 0.9, default: 0.2 }
+        - name: rentShare
+          in: query
+          description: Share of the expected fees over the term charged as rent.
+          schema: { type: number, minimum: 0, maximum: 1, default: 0.5 }
+        - $ref: "#/components/parameters/PaymentSignature"
+      responses:
+        "200":
+          description: The position, priced, with indicative terms.
+          headers:
+            PAYMENT-RESPONSE:
+              description: Base64 receipt for the payment that bought this response. Absent when free.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Valuation"
+                  - type: object
+                    properties:
+                      quote: { $ref: "#/components/schemas/Quote" }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/UpstreamError" }
+        "503": { $ref: "#/components/responses/Busy" }
+
+components:
+  parameters:
+    TokenId:
+      name: tokenId
+      in: path
+      required: true
+      description: Uniswap v4 PositionManager NFT id.
+      schema: { type: string, pattern: "^[0-9]{1,78}$" }
+      example: "2908254"
+
+    LookbackHours:
+      name: lookbackHours
+      in: query
+      description: |
+        Window the fee rate is measured over. The answer reports which source it came from and how
+        wide the window actually was, because those are not always what was asked for.
+      schema: { type: number, minimum: 0, maximum: 720, default: 24 }
+
+    PaymentSignature:
+      name: PAYMENT-SIGNATURE
+      in: header
+      required: false
+      description: |
+        The payment proof, as raw JSON or base64. `X402-PAYMENT` and `Authorization: x402 <proof>`
+        are accepted as spellings of the same thing. Omit it to receive the `402` that says what to
+        pay; omit it entirely when the service runs free.
+      schema: { type: string }
+
+  responses:
+    PaymentRequired:
+      description: |
+        No usable proof was presented. The body is the x402 version 2 envelope and is repeated,
+        base64-encoded, in the `PAYMENT-REQUIRED` header for clients that read headers only.
+      headers:
+        PAYMENT-REQUIRED:
+          description: The same envelope, base64-encoded.
+          schema: { type: string }
+        WWW-Authenticate:
+          description: Always `x402`.
+          schema: { type: string }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/PaymentRequiredEnvelope" }
+
+    NotFound:
+      description: No such route, or no such position on this chain.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          examples:
+            position:
+              value: { error: position_not_found, detail: "token 999999999 does not exist" }
+            route:
+              value: { error: not_found }
+
+    UpstreamError:
+      description: |
+        The chain could not be read. Distinct from a call that reverted, which is a real answer:
+        conflating the two is how a service tells somebody their position does not exist because a
+        node timed out. A payment spent on a request that failed here is released for one retry.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: upstream_error, message: "the chain could not be read right now" }
+
+    Busy:
+      description: Too many requests in flight. An honest refusal beats accepting work we cannot do.
+      headers:
+        retry-after:
+          schema: { type: string }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: busy, message: "too many requests in flight" }
+
+  schemas:
+    Health:
+      type: object
+      required: [ok, version, chainId, paywall]
+      properties:
+        ok: { type: boolean }
+        version: { type: string }
+        chainId: { type: integer, description: "4663 mainnet, 46630 testnet." }
+        paywall: { type: boolean, description: Whether a payment is required for the priced routes. }
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        message: { type: string }
+        detail: { type: string }
+
+    PaymentRequiredEnvelope:
+      type: object
+      description: x402 version 2. The scheme and the chain match the Olanas deployment.
+      required: [x402Version, accepts, resource]
+      properties:
+        x402Version: { type: integer, const: 2 }
+        error: { type: string }
+        accepts:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentRequirement" }
+        resource:
+          type: object
+          properties:
+            url: { type: string }
+            path: { type: string }
+            mimeType: { type: string }
+            description: { type: string }
+        instructions:
+          type: string
+          description: The same handshake in prose, for a human reading a failed request.
+
+    PaymentRequirement:
+      type: object
+      required: [scheme, network, amount, asset, payTo]
+      properties:
+        scheme: { type: string, const: onchain-tx }
+        network: { type: string, description: "CAIP-2, e.g. eip155:4663.", example: "eip155:4663" }
+        amount: { type: string, description: Wei, as a decimal string. }
+        asset:
+          type: string
+          description: The zero address means the chain's own coin rather than a token.
+          example: "0x0000000000000000000000000000000000000000"
+        payTo: { type: string }
+        maxTimeoutSeconds:
+          type: integer
+          description: How long the issued nonce stays redeemable.
+        extra:
+          type: object
+          description: |
+            The part a client must not ignore. `signThis` is the exact text to sign, with
+            `<txHash>` replaced by the hash of the transfer that was actually sent.
+          properties:
+            name: { type: string }
+            version: { type: string }
+            proof: { type: string, const: "confirmed-transaction+payer-signature" }
+            minConfirmations: { type: integer }
+            nonce: { type: string }
+            signThis: { type: string }
+
+    PaymentProof:
+      type: object
+      description: |
+        Sent back in `PAYMENT-SIGNATURE`, as raw JSON or base64. `scheme`, `txHash` and `payer` are
+        the fields Olanas uses. `nonce` and `signature` are this service's addition: without them a
+        mined transaction hash, which is public, would be enough for anyone to spend somebody
+        else's payment.
+      required: [scheme, txHash, payer, nonce, signature]
+      properties:
+        scheme: { type: string, const: onchain-tx }
+        txHash: { type: string, pattern: "^0x[0-9a-fA-F]{64}$" }
+        payer: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        nonce:
+          type: string
+          description: The nonce issued in the 402 for this exact resource.
+        signature:
+          type: string
+          description: |
+            `personal_sign` over `accepts[0].extra.signThis` by the sending account. Only low-s
+            signatures are accepted, so one signature cannot be reshaped into a second valid one.
+
+    PaymentReceipt:
+      type: object
+      description: Returned base64-encoded in `PAYMENT-RESPONSE` when a payment bought the response.
+      properties:
+        success: { type: boolean }
+        scheme: { type: string, const: onchain-tx }
+        network: { type: string }
+        transaction: { type: string }
+        payer: { type: string }
+        payTo: { type: string }
+        amountWei: { type: string }
+        resource: { type: string }
+
+    Token:
+      type: object
+      properties:
+        address: { type: string }
+        symbol: { type: string }
+        decimals: { type: integer }
+
+    Valuation:
+      type: object
+      required: [tokenId, chainId, owner, pool, position, price]
+      properties:
+        tokenId: { type: integer }
+        chainId: { type: integer }
+        owner: { type: string }
+        pool:
+          type: object
+          properties:
+            poolId: { type: string }
+            token0: { $ref: "#/components/schemas/Token" }
+            token1: { $ref: "#/components/schemas/Token" }
+            keyFeePips:
+              type: integer
+              description: "8388608 (0x800000) means the hook sets the fee dynamically."
+            currentLpFeePips: { type: integer }
+            tickSpacing: { type: integer }
+            hooks: { type: string }
+        position:
+          type: object
+          properties:
+            tickLower: { type: integer }
+            tickUpper: { type: integer }
+            liquidity: { type: string, description: Decimal string; it does not fit a JSON number. }
+            inRange: { type: boolean }
+            hasSubscriber: { type: boolean }
+            priceLower: { type: number }
+            priceUpper: { type: number }
+        price:
+          type: object
+          properties:
+            token0InToken1: { type: number }
+            tick: { type: integer }
+            sqrtPriceX96: { type: string }
+        principal: { $ref: "#/components/schemas/Amounts" }
+        uncollectedFees: { $ref: "#/components/schemas/Amounts" }
+        valueUSDG:
+          type: [object, "null"]
+          description: Null when USDG is not one of the pair; `valueNote` then says so.
+          properties:
+            principal: { type: number }
+            fees: { type: number }
+            total: { type: number }
+        valueNote: { type: [string, "null"] }
+        feeRate: { $ref: "#/components/schemas/FeeRate" }
+
+    Amounts:
+      type: object
+      properties:
+        amount0: { type: string }
+        amount1: { type: string }
+        raw0: { type: string }
+        raw1: { type: string }
+
+    FeeRate:
+      type: object
+      description: What the position's range earned over the window, and how good that measurement is.
+      properties:
+        available: { type: boolean }
+        reason: { type: string, description: Present when unavailable. }
+        source:
+          type: string
+          enum: [snapshot, rpc-archive, rpc-short-window]
+          description: |
+            `rpc-archive` read the state at the start of the requested window from an archive node.
+            `snapshot` used fee growth this service recorded earlier. `rpc-short-window` means the
+            node prunes and only the last few minutes were available. The window never widens beyond
+            what was asked for: answering over more history would answer a different question.
+        lowConfidence: { type: boolean }
+        windowSeconds: { type: integer }
+        fees0: { type: string }
+        fees1: { type: string }
+        feesUSDG: { type: [number, "null"] }
+        feesPerDayUSDG: { type: number }
+        feeAprPercent: { type: number }
+        plausible:
+          type: boolean
+          description: False when the fee-growth counter has wrapped and the figures are garbage.
+        note: { type: string }
+
+    Quote:
+      type: object
+      description: |
+        Indicative terms, not an offer and not advice. The buyback never exceeds the sale price:
+        the financier is paid for the use of the asset, never for the passage of time.
+      required: [available]
+      properties:
+        available: { type: boolean }
+        reason: { type: string, description: Present when no terms could be derived. }
+        termDays: { type: integer }
+        inputs:
+          type: object
+          properties:
+            haircut: { type: number }
+            rentShareOfExpectedFees: { type: number }
+        marketValueUSDG: { type: number }
+        suggestedSalePriceUSDG: { type: number }
+        suggestedBuybackPriceUSDG: { type: number }
+        expectedFeesOverTermUSDG: { type: number }
+        suggestedRentUSDG: { type: number }
+        feeRateLowConfidence:
+          type: boolean
+          description: Whether the rent rests on a narrow window. Price accordingly.
+        eligibility:
+          type: object
+          properties:
+            inRange: { type: boolean }
+            noSubscriber: { type: boolean }
+        disclaimer: { type: string }

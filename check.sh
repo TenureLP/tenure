@@ -23,6 +23,36 @@ step "Python: syntax of every module"
 python3 -m compileall -q lp-api/lpval landing/api landing/dev_server.py landing/server.py \
   landing/read_waitlist.py brand/build.py >/dev/null; note $?
 
+step "API: the spec describes exactly the routes that are served"
+# A description nobody checks drifts from the build within a week, and this one is handed to
+# third parties as the integration contract. No YAML parser: the path keys are the only thing
+# being read, and adding a dependency to check a file would be a poor trade.
+python3 - <<'PY'
+import re, sys
+sys.path.insert(0, "lp-api")
+from lpval import server
+
+text = open("lp-api/openapi.yaml", encoding="utf-8").read()
+body = text.split("\npaths:", 1)[1].split("\ncomponents:", 1)[0]
+documented = set(re.findall(r"^  (/\S*):$", body, re.M))
+
+served_fixed = {"/health", "/openapi.yaml"}
+missing = served_fixed - documented
+assert not missing, "served but undocumented: %s" % sorted(missing)
+
+templated = {p for p in documented if "{" in p}
+assert templated, "no position route documented"
+for path in templated:
+    concrete = path.replace("{tokenId}", "2908254")
+    assert server._ROUTE.match(concrete), "documented but not served: %s" % path
+
+phantom = {p for p in documented if "{" not in p} - served_fixed
+assert not phantom, "documented but not served: %s" % sorted(phantom)
+
+print("   %d paths, all served" % len(documented))
+PY
+note $?
+
 step "Landing: waitlist endpoint logic"
 python3 - <<'PY'
 import sys, os, json, tempfile

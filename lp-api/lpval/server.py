@@ -2,6 +2,7 @@
 
 Routes
   GET     /health
+  GET     /openapi.yaml                     the machine-readable description of everything below
   OPTIONS /v1/position/<tokenId>            CORS preflight, needed for the payment headers
   GET     /v1/position/<tokenId>            valuation        (paid when the paywall is enabled)
   GET     /v1/position/<tokenId>/quote      valuation + indicative sale-and-leaseback terms (paid)
@@ -34,6 +35,12 @@ _inflight = {}
 _slots = threading.Semaphore(_CONCURRENCY)
 _BUILD_BUDGET = 25.0  # wall clock a single valuation may spend upstream
 
+# Served from the running instance rather than a wiki, so the description cannot drift from the
+# build that answers. Read once; it is a few kilobytes and it never changes while the process runs.
+_SPEC_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "openapi.yaml")
+_spec_cache = None
+_spec_lock = threading.Lock()
+
 
 class _Flight:
     """One in-progress build. Followers read its outcome instead of repeating the work, and get the
@@ -45,6 +52,19 @@ class _Flight:
         self.event = threading.Event()
         self.value = None
         self.exc = None
+
+
+def _spec():
+    """This service's own OpenAPI document, read once."""
+    global _spec_cache
+    with _spec_lock:
+        if _spec_cache is None:
+            try:
+                with open(_SPEC_PATH, "rb") as fh:
+                    _spec_cache = fh.read()
+            except OSError:
+                _spec_cache = b""
+        return _spec_cache
 
 
 def _num(qs, key, default, lo, hi, cast=float):
@@ -112,10 +132,12 @@ def make_handler(rpc: Rpc, paywall: Paywall):
         timeout = 15
 
         def _send(self, status: int, body: dict, extra_headers=None):
-            raw = json.dumps(body, indent=2).encode()
+            self._send_raw(status, json.dumps(body, indent=2).encode(), "application/json")
+
+        def _send_raw(self, status: int, raw: bytes, content_type: str, extra_headers=None):
             try:
                 self.send_response(status)
-                self.send_header("content-type", "application/json")
+                self.send_header("content-type", content_type)
                 self.send_header("content-length", str(len(raw)))
                 self.send_header("access-control-allow-origin", "*")
                 self.send_header(
@@ -147,6 +169,14 @@ def make_handler(rpc: Rpc, paywall: Paywall):
             url = urlparse(self.path)
             if url.path == "/health":
                 return self._send(200, {"ok": True, "version": __version__, "chainId": CHAIN_ID, "paywall": paywall.enabled})
+
+            # Never priced. A client has to be able to read what it is being asked to pay for
+            # before it can decide to pay for it.
+            if url.path in ("/openapi.yaml", "/openapi.yml"):
+                body = _spec()
+                if not body:
+                    return self._send(404, {"error": "not_found"})
+                return self._send_raw(200, body, "application/yaml; charset=utf-8")
 
             m = _ROUTE.match(url.path)
             if not m:

@@ -122,6 +122,21 @@ node:
 
 in an hourly cron.
 
+## Machine-readable description
+
+[`openapi.yaml`](openapi.yaml) is OpenAPI 3.1 and covers every route, the `402` envelope, the
+proof, the receipt and every schema. The running instance serves it:
+
+```bash
+curl https://api-production-9e87.up.railway.app/openapi.yaml
+```
+
+Served rather than copied, so it cannot drift from the build that answers. `check.sh` fails if a
+route is served and undocumented, or documented and not served.
+
+[`../docs/OLANAS.md`](../docs/OLANAS.md) walks the payment handshake end to end and sets it beside
+the Olanas flow, which uses the same scheme on the same chain.
+
 ## Environment
 
 | Variable | Default |
