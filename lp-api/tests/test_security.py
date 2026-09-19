@@ -10,7 +10,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "landing"))
 
-from lpval import secp256k1  # noqa: E402
+from lpval import secp256k1, valuation  # noqa: E402
 from lpval.paywall import Paywall, payment_message  # noqa: E402
 from lpval.rpc import REVERTED, Rpc, UpstreamError  # noqa: E402
 
@@ -225,6 +225,100 @@ class RpcTest(unittest.TestCase):
 
     def test_reverted_is_not_the_same_as_unreachable(self):
         self.assertIsNot(REVERTED, None)
+
+
+class QuoteTest(unittest.TestCase):
+    """The vault refuses a listing whose price or rent is zero. A quote that cannot produce both is
+    not a set of terms anybody can act on, and saying `available` anyway sends a caller to a
+    transaction that reverts."""
+
+    @staticmethod
+    def _valuation(total, fee_rate):
+        return {
+            "valueUSDG": {"principal": total, "fees": 0.0, "total": total},
+            "position": {"inRange": True, "hasSubscriber": False},
+            "feeRate": fee_rate,
+        }
+
+    def test_an_empty_position_is_not_quotable(self):
+        # A closed position still reads as in range across its full tick span, so eligibility alone
+        # would call it fundable at a price of zero.
+        q = valuation.quote(self._valuation(0.0, {"available": True, "plausible": True, "feesPerDayUSDG": 1.0}))
+        self.assertFalse(q["available"])
+        self.assertNotIn("suggestedSalePriceUSDG", q)
+
+    def test_implausible_fees_do_not_produce_a_rentless_quote(self):
+        """A fee-growth counter that has wrapped yields absurd fees. It is caught, and the quote
+        used to keep saying available with a null rent."""
+        q = valuation.quote(
+            self._valuation(1000.0, {"available": True, "plausible": False, "feesPerDayUSDG": 4.1e49})
+        )
+        self.assertFalse(q["available"])
+        self.assertEqual(q["marketValueUSDG"], 1000.0)
+        self.assertIsNone(q.get("suggestedRentUSDG"))
+
+    def test_a_usable_rate_quotes_both_sides_and_no_spread(self):
+        q = valuation.quote(
+            self._valuation(1000.0, {"available": True, "plausible": True, "feesPerDayUSDG": 2.0}),
+            term_days=7,
+            haircut=0.20,
+            rent_share=0.5,
+        )
+        self.assertTrue(q["available"])
+        self.assertEqual(q["suggestedSalePriceUSDG"], 800.0)
+        # The financier's return comes from the rent, never from a spread on the buyback.
+        self.assertEqual(q["suggestedBuybackPriceUSDG"], q["suggestedSalePriceUSDG"])
+        self.assertEqual(q["expectedFeesOverTermUSDG"], 14.0)
+        self.assertEqual(q["suggestedRentUSDG"], 7.0)
+
+
+class FeeWindowTest(unittest.TestCase):
+    """The fee rate is only as good as the window it was measured over, and the depth of history a
+    node serves is not knowable in advance."""
+
+    class _Rpc:
+        """Answers historical calls only within `depth` blocks, like a pruning node."""
+
+        HEAD = 1_000_000
+
+        def __init__(self, depth):
+            self.depth = depth
+            self.asked = []
+
+        def block_number(self):
+            return self.HEAD
+
+        def block_timestamp(self, block):
+            return block // 10  # 100 ms blocks
+
+        def eth_calls(self, calls, block):
+            self.asked.append(block)
+            if self.HEAD - block > self.depth:
+                raise RuntimeError("missing trie node")
+            return [b"\x00" * 31 + b"\x07" + b"\x00" * 31 + b"\x09"]
+
+    _POS = {"poolId": "0x" + "ab" * 32, "tickLower": -60, "tickUpper": 60}
+
+    def test_an_archive_node_answers_the_whole_window(self):
+        rpc = self._Rpc(depth=10**9)
+        source, elapsed, words = valuation._rpc_window(rpc, self._POS, lookback_hours=24.0)
+        self.assertEqual(source, "rpc-archive")
+        self.assertEqual(elapsed, 24 * 3600)
+        self.assertEqual(list(words), [7, 9])
+
+    def test_a_pruning_node_falls_back_to_the_short_window(self):
+        rpc = self._Rpc(depth=valuation.SHORT_WINDOW_BLOCKS)
+        source, elapsed, _ = valuation._rpc_window(rpc, self._POS, lookback_hours=24.0)
+        self.assertEqual(source, "rpc-short-window")
+        self.assertEqual(elapsed, valuation.SHORT_WINDOW_BLOCKS // 10)
+
+    def test_the_fallback_never_widens_the_window(self):
+        """Answering over more history than was asked for answers a different question, and the
+        caller prices a deal on the answer."""
+        rpc = self._Rpc(depth=0)
+        self.assertIsNone(valuation._rpc_window(rpc, self._POS, lookback_hours=0.05))
+        widened = [b for b in rpc.asked if self._Rpc.HEAD - b > int(0.05 * 3600 / valuation.BLOCK_SECONDS)]
+        self.assertEqual(widened, [])
 
 
 class WaitlistTest(unittest.TestCase):

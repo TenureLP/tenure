@@ -14,6 +14,7 @@ STATE_VIEW = "0xf3334192d15450cdd385c8b70e03f9a6bd9e673b"
 USDG = "0x5fc5360d0400a0fd4f2af552add042d716f1d168"
 NATIVE = "0x" + "00" * 20
 SHORT_WINDOW_BLOCKS = 5_000  # about 8 minutes of 100 ms blocks, within what the public RPC serves
+BLOCK_SECONDS = 0.1  # only used to aim at a block; the window is measured from its own timestamp
 
 _token_cache = {NATIVE: {"address": NATIVE, "symbol": "ETH", "decimals": 18}}
 
@@ -189,6 +190,51 @@ def value_position(rpc: Rpc, token_id: int, block="latest", lookback_hours: floa
     return out
 
 
+def _rpc_window(rpc: Rpc, p: dict, lookback_hours: float):
+    """Reads `feeGrowthInside` as it stood one lookback ago, at whatever depth the node serves.
+
+    An archive node answers the whole window, which is what makes a fee rate worth quoting on the
+    very first request instead of after a day of collecting our own snapshots. A pruned node
+    answers nothing that old, so we retry once over the short window the public node does serve,
+    and say which of the two the number came from.
+
+    Returns (source, elapsed_seconds, (feeGrowth0, feeGrowth1)) or None.
+    """
+    now_block = rpc.block_number()
+    pool_id = bytes.fromhex(p["poolId"][2:])
+    data = abi.call_data(
+        "getFeeGrowthInside(bytes32,int24,int24)",
+        pool_id,
+        abi.enc_int(p["tickLower"]),
+        abi.enc_int(p["tickUpper"]),
+    )
+
+    wanted = int(lookback_hours * 3600 / BLOCK_SECONDS)
+    attempts = [(wanted, "rpc-archive")]
+    # Only ever fall back to a *shorter* window. Quietly returning more history than was asked for
+    # would answer a different question than the caller's, and they price on the answer.
+    if SHORT_WINDOW_BLOCKS < wanted:
+        attempts.append((SHORT_WINDOW_BLOCKS, "rpc-short-window"))
+
+    now_ts = None
+    for blocks_back, source in attempts:
+        if blocks_back <= 0 or blocks_back >= now_block:
+            continue
+        past_block = now_block - blocks_back
+        try:
+            past = rpc.eth_calls([(STATE_VIEW, data)], past_block)[0]
+        except Exception:
+            continue  # a node that prunes raises rather than answering; try the shorter window
+        if not isinstance(past, bytes) or len(past) < 64:
+            continue
+        if now_ts is None:
+            now_ts = rpc.block_timestamp(now_block)
+        elapsed = now_ts - rpc.block_timestamp(past_block)
+        if elapsed > 0:
+            return source, elapsed, abi.words(past)
+    return None
+
+
 def _fee_rate(rpc: Rpc, p: dict, principal_usdg, lookback_hours: float) -> dict:
     """Fees this position's range earned per unit of liquidity over a lookback window."""
     try:
@@ -198,21 +244,10 @@ def _fee_rate(rpc: Rpc, p: dict, principal_usdg, lookback_hours: float) -> dict:
         if snap:
             source, elapsed, pw = "snapshot", now - snap[0], (snap[1], snap[2])
         else:
-            # The public RPC only serves a few minutes of history: short, low-confidence window.
-            now_block = rpc.block_number()
-            past_block = max(1, now_block - SHORT_WINDOW_BLOCKS)
-            pool_id = bytes.fromhex(p["poolId"][2:])
-            data = abi.call_data(
-                "getFeeGrowthInside(bytes32,int24,int24)",
-                pool_id,
-                abi.enc_int(p["tickLower"]),
-                abi.enc_int(p["tickUpper"]),
-            )
-            past = rpc.eth_calls([(STATE_VIEW, data)], past_block)[0]
-            if not isinstance(past, bytes) or len(past) < 64:
+            window = _rpc_window(rpc, p, lookback_hours)
+            if window is None:
                 return {"available": False, "reason": "no snapshot yet and historical state not served by this RPC"}
-            elapsed = rpc.block_timestamp(now_block) - rpc.block_timestamp(past_block)
-            source, pw = "rpc-short-window", abi.words(past)
+            source, elapsed, pw = window
         if elapsed <= 0:
             return {"available": False, "reason": "could not measure elapsed time"}
         f0 = v4math.fees_owed(p["feeGrowthInside0"], pw[0], p["liquidity"])
@@ -221,7 +256,10 @@ def _fee_rate(rpc: Rpc, p: dict, principal_usdg, lookback_hours: float) -> dict:
         res = {
             "available": True,
             "source": source,
-            "lowConfidence": source != "snapshot" or elapsed < 3600,
+            # An archive node answering the full window is as good a measurement as our own
+            # snapshot, and reads exact state rather than what we happened to record. Only a
+            # window that is short, or one we had to shrink to get an answer, is weak evidence.
+            "lowConfidence": elapsed < 3600 or source == "rpc-short-window",
             "windowSeconds": elapsed,
             "fees0": _fmt(f0, p["token0"]["decimals"]),
             "fees1": _fmt(f1, p["token1"]["decimals"]),
@@ -244,11 +282,23 @@ def quote(valuation: dict, term_days: int = 7, haircut: float = 0.20, rent_share
     v = valuation.get("valueUSDG")
     if not v:
         return {"available": False, "reason": valuation.get("valueNote") or "no USDG value"}
-    price = v["total"] * (1 - haircut)
+    if not v["total"]:
+        # A closed or never-funded position still reads as in range over its full tick span, so
+        # eligibility alone would call it fundable. There is nothing to sell.
+        return {"available": False, "reason": "the position holds no liquidity"}
+
     fr = valuation.get("feeRate") or {}
-    rent = None
-    if fr.get("available") and fr.get("plausible") and fr.get("feesPerDayUSDG") is not None:
-        rent = fr["feesPerDayUSDG"] * term_days * rent_share
+    if not (fr.get("available") and fr.get("plausible") and fr.get("feesPerDayUSDG") is not None):
+        # The vault rejects a listing whose rent is zero, so a price without a rent is not a set of
+        # terms anybody could act on. Say so instead of returning half of a quote as available.
+        return {
+            "available": False,
+            "reason": fr.get("reason") or "the fee rate is not usable, so no rent can be derived from it",
+            "marketValueUSDG": v["total"],
+        }
+
+    price = v["total"] * (1 - haircut)
+    rent = fr["feesPerDayUSDG"] * term_days * rent_share
     return {
         "available": True,
         "termDays": term_days,
@@ -256,8 +306,11 @@ def quote(valuation: dict, term_days: int = 7, haircut: float = 0.20, rent_share
         "marketValueUSDG": v["total"],
         "suggestedSalePriceUSDG": round(price, 2),
         "suggestedBuybackPriceUSDG": round(price, 2),
-        "expectedFeesOverTermUSDG": round(fr["feesPerDayUSDG"] * term_days, 4) if rent is not None else None,
-        "suggestedRentUSDG": round(rent, 4) if rent is not None else None,
+        "expectedFeesOverTermUSDG": round(fr["feesPerDayUSDG"] * term_days, 4),
+        "suggestedRentUSDG": round(rent, 4),
+        # The rent is only as good as the window it was measured over. A caller pricing a deal
+        # should know whether that was a day of history or eight minutes of it.
+        "feeRateLowConfidence": bool(fr.get("lowConfidence")),
         "eligibility": {
             "inRange": valuation["position"]["inRange"],
             "noSubscriber": not valuation["position"]["hasSubscriber"],
