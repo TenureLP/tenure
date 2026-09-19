@@ -98,6 +98,19 @@
   .lock span { font-size: 186px; font-weight: 600; letter-spacing: -.016em; line-height: 1 }
   .soon { margin-top: 62px; padding-left: .5em; font-size: 44px; font-weight: 600; color: var(--amber); animation: spread 1s cubic-bezier(.2,.8,.2,1) both 13.95s }
   .sub { margin-top: 34px; font-size: 30px; color: var(--muted); animation: fade .7s ease both 14.15s }
+
+  /* The launch ending. Same film, because the story is the part that works; only the last two
+     seconds change. ?end=launch swaps them. */
+  .end .launch { display: none }
+  html[data-end="launch"] .end .soon, html[data-end="launch"] .end .sub { display: none }
+  html[data-end="launch"] .end .launch { display: block }
+  .tick2 { margin-top: 58px; font-size: 128px; font-weight: 700; letter-spacing: -.02em; line-height: 1;
+           color: var(--amber); animation: zoom .8s cubic-bezier(.2,.8,.2,1) both 13.95s }
+  .liveon { margin-top: 26px; font-size: 34px; font-weight: 600; letter-spacing: .34em; padding-left: .34em;
+            color: var(--ink); animation: spread 1s cubic-bezier(.2,.8,.2,1) both 14.3s }
+  .ca { margin-top: 40px; font-family: Consolas, "SF Mono", Menlo, monospace; font-size: 25px;
+        color: var(--muted); border: 1px solid var(--line); border-radius: 14px; padding: 16px 30px;
+        display: inline-block; animation: fade .7s ease both 14.7s }
 </style>
 </head>
 <body>
@@ -178,12 +191,19 @@
     <div class="lock"><svg><use href="#mark"/></svg><span>Tenure</span></div>
     <div class="soon">COMING SOON</div>
     <div class="sub" id="sub">Uniswap v4 &middot; Robinhood Chain</div>
+    <div class="launch">
+      <div class="tick2">TEN</div>
+      <div class="liveon">LIVE ON PONS</div>
+      <div class="ca">0x4bA94fB1D3fDF414afdc955CD29836016eDF3531</div>
+    </div>
   </div>
 </div>
 
 <script>
   (function () {
     var q = new URLSearchParams(location.search);
+    // Read before load so the swap is in place for the very first painted frame.
+    if (q.get("end")) document.documentElement.dataset.end = q.get("end");
     if (q.get("tag")) document.getElementById("sub").textContent = q.get("tag");
     window.addEventListener("load", function () {
       if (!q.has("t")) return;

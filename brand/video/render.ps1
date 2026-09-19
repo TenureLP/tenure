@@ -2,12 +2,15 @@
 #   .\render.ps1                          full render, 1920x1080, 30 fps, 11.5 s  ->  tenure-intro.mp4
 #   .\render.ps1 -Only 2500,5500,10000    just these instants (ms), as PNGs in .\stills, for a quick look
 #   .\render.ps1 -Tag "tenure.xyz"        replaces the last line of the end card
-param([int[]]$Only, [string]$Tag = "", [int]$Fps = 30, [double]$Seconds = 16.0, [int]$Workers = 8)
+param([int[]]$Only, [string]$Tag = "", [string]$End = "", [string]$Out = "tenure-intro.mp4",
+      [int]$Fps = 30, [double]$Seconds = 16.0, [int]$Workers = 8)
 $ErrorActionPreference = "Stop"
 $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $exe = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 $page = "file:///" + (Join-Path $dir "intro.html").Replace("\", "/")
-$q = if ($Tag) { "&tag=" + [uri]::EscapeDataString($Tag) } else { "" }
+$q = ""
+if ($Tag) { $q += "&tag=" + [uri]::EscapeDataString($Tag) }
+if ($End) { $q += "&end=" + [uri]::EscapeDataString($End) }
 
 function Shoot([int]$ms, [string]$out, [int]$slot) {
   $prof = Join-Path $env:TEMP "tenure-render-video-$slot"
@@ -43,5 +46,5 @@ $got = (Get-ChildItem $frames -Filter *.png).Count
 if ($got -ne $total) { throw "missing frames" }
 
 $w = (wsl -e wslpath -a "$dir").Trim()
-wsl -e ffmpeg -y -loglevel error -framerate $Fps -i "$w/frames/f_%04d.png" -c:v libx264 -preset slow -crf 16 -pix_fmt yuv420p -movflags +faststart "$w/tenure-intro.mp4"
-wsl -e ffprobe -v error -show_entries "format=duration,size:stream=codec_name,width,height,r_frame_rate" -of "default=nw=1" "$w/tenure-intro.mp4"
+wsl -e ffmpeg -y -loglevel error -framerate $Fps -i "$w/frames/f_%04d.png" -c:v libx264 -preset slow -crf 16 -pix_fmt yuv420p -movflags +faststart "$w/$Out"
+wsl -e ffprobe -v error -show_entries "format=duration,size:stream=codec_name,width,height,r_frame_rate" -of "default=nw=1" "$w/$Out"
