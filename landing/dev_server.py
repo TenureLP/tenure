@@ -14,9 +14,14 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-os.environ.setdefault("WAITLIST_FILE", os.path.join(HERE, os.pardir, ".waitlist", "waitlist.jsonl"))
 
 from api.waitlist import process, read_length  # noqa: E402
+
+# Where a local preview keeps signups. It is set when this file is run, never when it is imported:
+# server.py imports this module for the handler, and at import time this line was quietly giving the
+# deployed service a writable path, which is exactly the misconfiguration the endpoint is supposed
+# to refuse.
+LOCAL_WAITLIST = os.path.join(HERE, os.pardir, ".waitlist", "waitlist.jsonl")
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -48,6 +53,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    os.environ.setdefault("WAITLIST_FILE", LOCAL_WAITLIST)
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8410
     httpd = ThreadingHTTPServer(("127.0.0.1", port), partial(Handler, directory=HERE))
     print(f"landing on http://127.0.0.1:{port}")

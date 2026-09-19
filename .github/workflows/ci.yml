@@ -48,6 +48,19 @@ jobs:
           assert read_length("-1") is None and read_length("abc") is None
           print("ok")
           PY
+      - name: an unconfigured deployment refuses signups
+        run: |
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, "landing")
+          for var in ("WAITLIST_FILE", "WAITLIST_WEBHOOK_URL", "VERCEL"):
+              os.environ.pop(var, None)
+          import server  # the production entry point, which imports dev_server for its handler
+          from api.waitlist import process
+          assert "WAITLIST_FILE" not in os.environ, "importing the server configured delivery"
+          assert process(b'{"email":"a@b.co"}')[0] == 503, "accepted a signup with nowhere to put it"
+          print("ok")
+          PY
 
 # The fork tests are deliberately absent: they need a live node, and a chain outage is not a reason
 # to mark a commit broken. Run them with lease-vault/fork-test.sh before anything is deployed.

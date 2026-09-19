@@ -42,6 +42,25 @@ print("   5 cases ok")
 PY
 note $?
 
+step "Landing: an unconfigured deployment refuses signups"
+# A fresh interpreter, because what is being tested is what importing the production entry point
+# does to the environment. This is how a live page came to answer 200 and lose the address:
+# server.py imports dev_server for its handler, and dev_server set a writable path at import time.
+python3 - <<'PY'
+import os, sys
+sys.path.insert(0, "landing")
+for var in ("WAITLIST_FILE", "WAITLIST_WEBHOOK_URL", "VERCEL"):
+    os.environ.pop(var, None)
+import server  # noqa: F401  the production entry point
+from api.waitlist import process
+
+assert "WAITLIST_FILE" not in os.environ, "importing the server configured delivery by itself"
+status, _ = process(b'{"email":"a@b.co"}')
+assert status == 503, f"accepted a signup with nowhere to put it (got {status})"
+print("   refuses with 503, and the import sets nothing")
+PY
+note $?
+
 if [ "${1:-}" = "--fork" ]; then
   step "Solidity: fork integration tests"
   (cd lease-vault && ./fork-test.sh); note $?
