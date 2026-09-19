@@ -144,6 +144,44 @@ curl https://api-production-9e87.up.railway.app/openapi.yaml
 Served rather than copied, so the description cannot drift from the build that answers it. `check.sh`
 fails if a route is served and undocumented, or documented and not served.
 
+## Listing on the launchpad
+
+`olanas.xyz` is an API launchpad: paste an endpoint, set a price per request, sign, and it handles
+the payment wall, settlement, the public listing and the analytics. It charges no platform fee.
+
+**Read this before turning our own paywall on.** The launch form says it keeps the submitted URL
+private and puts a protected public gateway in front of it. Their gateway is the thing collecting
+payment. An upstream that also demands payment would mean a caller pays twice, and the second
+charge would be the one they never agreed to. The public deployment runs free, with `LPVAL_PAY_TO`
+unset, which is exactly the shape that arrangement wants. Leave it that way while listed there, or
+list a separate instance.
+
+What the form asks for, and what to put:
+
+| Field | Value |
+|---|---|
+| API endpoint | `https://api-production-9e87.up.railway.app` |
+| Product name | Tenure position valuation |
+| Category | Finance |
+| One-line description | Prices any Uniswap v4 liquidity position on Robinhood Chain, and proposes sale-and-leaseback terms for it. |
+| OpenAPI schema | [`lp-api/openapi.json`](../lp-api/openapi.json), or download `/openapi.json` from the live service |
+| What it does | **Read data (GET)** only. Nothing here writes. |
+| Logo | `brand/logo-mark-512.png`, square, 127 KB against a 512 KB limit |
+| Payment network | Robinhood Chain, `4663`, fixed |
+| Demo video | optional, and there is nothing worth showing yet |
+
+The schema field is optional on the form and the reason to fill it is written next to it: it is what
+lets an agent understand the inputs and responses without a human in the loop. It takes JSON and
+caps at 256 KB; ours is 26 KB.
+
+On price, their own example runs at 0.002 USDC per request. The service's default is
+`1000000000000` wei, about a third of a US cent at present, which is the same order. USDG is the
+friendlier unit to price in, since it is the unit every valuation is already denominated in.
+
+Publishing needs a wallet connection and a signature proving ownership of the endpoint. That is not
+something this repository can or should do for anybody: it is the operator's key and the operator's
+claim.
+
 ## What is true today, and what is not
 
 **True:** the chain, the scheme, the headers and the proof shape line up. The document above exists,
@@ -155,6 +193,10 @@ resource server delegating verification to a facilitator is the more usual x402 
 open question and a reasonable first thing to try together.
 
 **Not ours to decide:** Olanas's roadmap lists *documenting third-party integration interfaces*
-under work still to come. Where a third-party API belongs in their product, and on what terms, is
-theirs to say. This document exists so the answer does not have to start with a week of reading our
-source.
+under work still to come, and the launchpad is described on their own site as a beta. Where a
+third-party API belongs in their product, and on what terms, is theirs to say. This document exists
+so the answer does not have to start with a week of reading our source.
+
+Their account is [@Olanas_Infra](https://x.com/Olanas_Infra), and the token contract they publish is
+`0x9400eB66B1320050A68F25A624985a674F033902` on Robinhood Chain. Verify it against
+[their documentation](https://github.com/olanass/docs) rather than against this file.

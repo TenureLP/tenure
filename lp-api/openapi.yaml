@@ -60,7 +60,9 @@ paths:
     get:
       tags: [Service]
       summary: This document
-      description: Served by the running instance, so the description can never drift from the build.
+      description: |
+        Served by the running instance, so the description can never drift from the build. `.yml` is
+        accepted as the same thing.
       operationId: getOpenApiYaml
       responses:
         "200":
@@ -68,6 +70,21 @@ paths:
           content:
             application/yaml:
               schema: { type: string }
+
+  /openapi.json:
+    get:
+      tags: [Service]
+      summary: This document, as JSON
+      description: |
+        The same document. YAML is what a person reads; some tooling will not take anything but
+        JSON, and asking a directory to convert it is asking for a stale copy.
+      operationId: getOpenApiJson
+      responses:
+        "200":
+          description: This document, as JSON.
+          content:
+            application/json:
+              schema: { type: object }
 
   /v1/position/{tokenId}:
     get:

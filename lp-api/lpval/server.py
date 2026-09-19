@@ -3,6 +3,7 @@
 Routes
   GET     /health
   GET     /openapi.yaml                     the machine-readable description of everything below
+  GET     /openapi.json                     the same document, for tooling that will not take YAML
   HEAD    any of the above                  the same headers, no body
   OPTIONS /v1/position/<tokenId>            CORS preflight, needed for the payment headers
   GET     /v1/position/<tokenId>            valuation        (paid when the paywall is enabled)
@@ -38,8 +39,13 @@ _BUILD_BUDGET = 25.0  # wall clock a single valuation may spend upstream
 
 # Served from the running instance rather than a wiki, so the description cannot drift from the
 # build that answers. Read once; it is a few kilobytes and it never changes while the process runs.
-_SPEC_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "openapi.yaml")
-_spec_cache = None
+_SPEC_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_SPEC_FILES = {
+    "/openapi.yaml": ("openapi.yaml", "application/yaml; charset=utf-8"),
+    "/openapi.yml": ("openapi.yaml", "application/yaml; charset=utf-8"),
+    "/openapi.json": ("openapi.json", "application/json; charset=utf-8"),
+}
+_spec_cache = {}
 _spec_lock = threading.Lock()
 
 
@@ -55,17 +61,16 @@ class _Flight:
         self.exc = None
 
 
-def _spec():
-    """This service's own OpenAPI document, read once."""
-    global _spec_cache
+def _spec(name):
+    """This service's own OpenAPI document, read once per spelling."""
     with _spec_lock:
-        if _spec_cache is None:
+        if name not in _spec_cache:
             try:
-                with open(_SPEC_PATH, "rb") as fh:
-                    _spec_cache = fh.read()
+                with open(os.path.join(_SPEC_DIR, name), "rb") as fh:
+                    _spec_cache[name] = fh.read()
             except OSError:
-                _spec_cache = b""
-        return _spec_cache
+                _spec_cache[name] = b""
+        return _spec_cache[name]
 
 
 def _num(qs, key, default, lo, hi, cast=float):
@@ -186,11 +191,12 @@ def make_handler(rpc: Rpc, paywall: Paywall):
 
             # Never priced. A client has to be able to read what it is being asked to pay for
             # before it can decide to pay for it.
-            if url.path in ("/openapi.yaml", "/openapi.yml"):
-                body = _spec()
+            spec = _SPEC_FILES.get(url.path)
+            if spec:
+                body = _spec(spec[0])
                 if not body:
                     return self._send(404, {"error": "not_found"})
-                return self._send_raw(200, body, "application/yaml; charset=utf-8")
+                return self._send_raw(200, body, spec[1])
 
             m = _ROUTE.match(url.path)
             if not m:

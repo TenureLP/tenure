@@ -23,35 +23,42 @@ step "Python: syntax of every module"
 python3 -m compileall -q lp-api/lpval landing/api landing/dev_server.py landing/server.py \
   landing/read_waitlist.py brand/build.py >/dev/null; note $?
 
-step "API: the spec describes exactly the routes that are served"
-# A description nobody checks drifts from the build within a week, and this one is handed to
-# third parties as the integration contract. No YAML parser: the path keys are the only thing
-# being read, and adding a dependency to check a file would be a poor trade.
+step "API: the description matches the service, and both spellings match each other"
+# A description nobody checks drifts from the build within a week, and this one is handed to third
+# parties as the integration contract. Three layers, the first two needing nothing but the standard
+# library: the JSON is read with `json`, the YAML path keys with a regex, and full equality only
+# when PyYAML happens to be installed.
 python3 - <<'PY'
-import re, sys
+import json, re, sys
 sys.path.insert(0, "lp-api")
 from lpval import server
 
-text = open("lp-api/openapi.yaml", encoding="utf-8").read()
-body = text.split("\npaths:", 1)[1].split("\ncomponents:", 1)[0]
-documented = set(re.findall(r"^  (/\S*):$", body, re.M))
+doc = json.load(open("lp-api/openapi.json", encoding="utf-8"))
+documented = set(doc["paths"])
 
-served_fixed = {"/health", "/openapi.yaml"}
-missing = served_fixed - documented
-assert not missing, "served but undocumented: %s" % sorted(missing)
-
+served_fixed = set(server._SPEC_FILES) | {"/health"}
 templated = {p for p in documented if "{" in p}
 assert templated, "no position route documented"
 for path in templated:
-    concrete = path.replace("{tokenId}", "2908254")
-    assert server._ROUTE.match(concrete), "documented but not served: %s" % path
+    assert server._ROUTE.match(path.replace("{tokenId}", "2908254")), "documented, not served: %s" % path
 
-phantom = {p for p in documented if "{" not in p} - served_fixed
-assert not phantom, "documented but not served: %s" % sorted(phantom)
+flat = {p for p in documented if "{" not in p}
+# /openapi.yml is served as an alias and deliberately not documented twice.
+assert flat <= served_fixed, "documented, not served: %s" % sorted(flat - served_fixed)
+assert served_fixed - flat <= {"/openapi.yml"}, "served, undocumented: %s" % sorted(served_fixed - flat - {"/openapi.yml"})
 
-print("   %d paths, all served" % len(documented))
+text = open("lp-api/openapi.yaml", encoding="utf-8").read()
+body = text.split("\npaths:", 1)[1].split("\ncomponents:", 1)[0]
+assert set(re.findall(r"^  (/\S*):$", body, re.M)) == documented, "openapi.yaml and openapi.json disagree"
+
+print("   %d paths, all served, both spellings agree" % len(documented))
 PY
 note $?
+
+step "API: openapi.json is not stale"
+(cd lp-api && python3 -c "import yaml" 2>/dev/null \
+  && python3 make-openapi-json.py --check \
+  || echo "   skipped, PyYAML not installed"); note $?
 
 step "Landing: waitlist endpoint logic"
 python3 - <<'PY'
