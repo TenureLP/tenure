@@ -258,6 +258,14 @@ class WaitlistTest(unittest.TestCase):
         for ch in "`[]()":
             self.assertNotIn(ch, cleaned)
 
+    def test_unconfigured_refuses_instead_of_dropping(self):
+        """With nowhere to deliver, the endpoint must say so. It used to default to a file in the
+        working directory, which on a container is erased at the next deploy: the signup was
+        answered 200 and then lost."""
+        os.environ.pop("WAITLIST_FILE", None)
+        status, _ = self.waitlist.process(b'{"email":"a@b.co"}')
+        self.assertEqual(status, 503)
+
 
 class EnvelopeTest(unittest.TestCase):
     """The 402 body follows x402 version 2, so a standard client understands the shape even though

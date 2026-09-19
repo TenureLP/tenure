@@ -4,10 +4,16 @@ Where signups go, in order:
   1. WAITLIST_WEBHOOK_URL set: each signup is POSTed there as JSON. A Discord webhook URL is detected
      and gets a Discord-shaped message. Any other URL (Google Apps Script, Make, Zapier, your own API)
      receives {"email", "role", "source", "ts"}.
-  2. Otherwise, off Vercel: appended to WAITLIST_FILE. Duplicates are removed when the list is read,
-     not on the way in: re-reading the whole file per signup is linear in its size, and the
-     check-then-append it would need is a race between concurrent requests anyway.
+  2. WAITLIST_FILE set, off Vercel: appended to that path. This is the local-development path.
+     Duplicates are removed when the list is read, not on the way in: re-reading the whole file per
+     signup is linear in its size, and the check-then-append it would need is a race between
+     concurrent requests anyway.
   3. Otherwise: 503, so a misconfigured deployment fails loudly instead of dropping signups.
+
+The file path has to be named explicitly. Defaulting to a file in the working directory looked
+harmless and was not: on a container that directory is thrown away at every redeploy, so the
+endpoint answered 200 to people whose address it was about to lose. Refusing a signup is
+recoverable, accepting one and dropping it is not.
 """
 
 import json
@@ -108,8 +114,9 @@ def process(raw: bytes):
         if url:
             _deliver_webhook(url, record)
             return 200, {"ok": True}
-        if not os.environ.get("VERCEL"):
-            _deliver_file(os.environ.get("WAITLIST_FILE", "waitlist.jsonl"), record)
+        path = os.environ.get("WAITLIST_FILE", "").strip()
+        if path and not os.environ.get("VERCEL"):
+            _deliver_file(path, record)
             # Deliberately the same answer whether or not this address was already on the list.
             # Anything else lets a stranger ask the endpoint who signed up.
             return 200, {"ok": True}

@@ -4,10 +4,33 @@ Two services, both from this repository, both Python with no dependencies to ins
 fit here because the API is a long-running process that needs a disk: the paywall's ledger of spent
 payments has to survive a restart, or a payment already redeemed could be redeemed again.
 
+Each service has its own `Dockerfile`: four lines, a base image and a copy. It is there so the build
+does not depend on a platform correctly guessing the language, the entrypoint and the Python
+version. When that guessing was left on, the platform reported a different builder than the one
+configured and neither the start command nor the health check survived.
+
+## Pushing from the command line
+
+`railway up` uploads the directory you run it from. **Do not run it from a Windows drive mounted
+into WSL.** The archive it builds from `/mnt/c` carries mode 0777 on every entry and the builder
+rejects it: the deployment fails within twenty seconds, at scheduling, with no build output at all
+to explain itself. The identical tree deploys in twenty seconds from the Linux filesystem.
+
+Stage a clean copy of exactly what is committed, and deploy that:
+
+```bash
+rm -rf /tmp/deploy && mkdir -p /tmp/deploy
+git archive HEAD lp-api landing | tar -x -C /tmp/deploy
+cd /tmp/deploy/lp-api && railway up --service api --detach
+```
+
+Linking is per directory, so a staged copy needs
+`railway link --project <id> --environment production --service <name>` once.
+
 ## 1. The valuation API
 
-Create a service from this repository with **root directory `lp-api`**. `railway.json` already sets
-the start command, the health check on `/health` and the restart policy, so there is nothing to type.
+Create a service from this repository with **root directory `lp-api`**. `railway.json` sets the
+health check on `/health` and the restart policy; the `Dockerfile` sets the start command.
 
 **Attach a volume.** Mount it anywhere, for example `/data`. Then set:
 
@@ -48,6 +71,21 @@ URL. Any other URL receives `{"email", "role", "source", "ts"}`.
 **Without that variable the signup form answers 503.** That is deliberate: the endpoint refuses to
 accept an address it cannot deliver, rather than dropping it silently. Set it before sharing the
 link.
+
+`WAITLIST_FILE` is the local-development path and has to name a file explicitly. It is not a
+substitute for the webhook here: a container's filesystem is replaced on every deploy, so a file
+written inside one is a signup collected and then lost. The server prints where signups go on the
+line it logs at boot, so a misconfigured deployment is visible without having to sign up to find
+out.
+
+## What is live now
+
+| Service | URL |
+|---|---|
+| API | `https://api-production-9e87.up.railway.app` — try `/health`, or `/v1/position/2908278/quote` |
+| Landing | `https://landing-production-abe1.up.railway.app` |
+
+Both are generated Railway subdomains and will change the day a real domain is pointed at them.
 
 ## 3. Afterwards
 

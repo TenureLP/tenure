@@ -23,7 +23,11 @@ def main():
     # deployment reports itself healthy and answers nothing.
     host = os.environ.get("HOST") or ("0.0.0.0" if env_port else "127.0.0.1")
     httpd = ThreadingHTTPServer((host, port), partial(Handler, directory=HERE))
-    where = os.environ.get("WAITLIST_WEBHOOK_URL") and "webhook" or os.environ.get("WAITLIST_FILE", "file")
+    if os.environ.get("WAITLIST_WEBHOOK_URL"):
+        where = "webhook"
+    else:
+        # Say it plainly at boot rather than letting it be discovered by a visitor who signs up.
+        where = os.environ.get("WAITLIST_FILE") or "nowhere, signups answer 503"
     print(f"landing on http://{host}:{port}  signups -> {where}", flush=True)
     httpd.serve_forever()
 
