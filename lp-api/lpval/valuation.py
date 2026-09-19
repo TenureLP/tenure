@@ -15,6 +15,9 @@ USDG = "0x5fc5360d0400a0fd4f2af552add042d716f1d168"
 NATIVE = "0x" + "00" * 20
 SHORT_WINDOW_BLOCKS = 5_000  # about 8 minutes of 100 ms blocks, within what the public RPC serves
 BLOCK_SECONDS = 0.1  # only used to aim at a block; the window is measured from its own timestamp
+# How much of the requested window a snapshot must already cover to be used without asking a node
+# for the rest. Below this, an archive read is worth the round trip.
+SNAPSHOT_IS_WIDE_ENOUGH = 0.8
 
 _token_cache = {NATIVE: {"address": NATIVE, "symbol": "ETH", "decimals": 18}}
 
@@ -245,13 +248,21 @@ def _fee_rate(rpc: Rpc, p: dict, principal_usdg, lookback_hours: float) -> dict:
         now = int(time.time())
         snap = snapshots.oldest_within(p["poolId"], p["tickLower"], p["tickUpper"], lookback_hours * 3600, now)
         snapshots.record(p["poolId"], p["tickLower"], p["tickUpper"], p["feeGrowthInside0"], p["feeGrowthInside1"], now)
-        if snap:
-            source, elapsed, pw = "snapshot", now - snap[0], (snap[1], snap[2])
-        else:
+        best = ("snapshot", now - snap[0], (snap[1], snap[2])) if snap else None
+
+        # A snapshot is exact and free, but only as wide as our own uptime. Letting any snapshot
+        # win meant a service that had been up for fifty minutes quoted a rent off fifty minutes
+        # while a full day of history sat one archive call away. Ask for the day unless what we
+        # already hold covers nearly all of it, and keep whichever window is actually wider.
+        wanted = lookback_hours * 3600
+        if best is None or best[1] < wanted * SNAPSHOT_IS_WIDE_ENOUGH:
             window = _rpc_window(rpc, p, lookback_hours)
-            if window is None:
-                return {"available": False, "reason": "no snapshot yet and historical state not served by this RPC"}
-            source, elapsed, pw = window
+            if window is not None and (best is None or window[1] > best[1]):
+                best = window
+
+        if best is None:
+            return {"available": False, "reason": "no snapshot yet and historical state not served by this RPC"}
+        source, elapsed, pw = best
         if elapsed <= 0:
             return {"available": False, "reason": "could not measure elapsed time"}
         f0 = v4math.fees_owed(p["feeGrowthInside0"], pw[0], p["liquidity"])

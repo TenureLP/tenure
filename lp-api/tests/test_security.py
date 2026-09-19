@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 import urllib.error
 
@@ -449,6 +450,52 @@ class FeeWindowTest(unittest.TestCase):
         source, elapsed, _ = valuation._rpc_window(rpc, self._POS, lookback_hours=24.0)
         self.assertEqual(source, "rpc-short-window")
         self.assertEqual(elapsed, valuation.SHORT_WINDOW_BLOCKS // 10)
+
+    def _fee_rate_with(self, snapshot_age, archive_window):
+        """Runs the source choice with a snapshot of a given age and an archive read of a given
+        width, and reports which one the rate ended up being measured over."""
+        from lpval import snapshots
+
+        now = int(time.time())
+        position = {
+            "poolId": "0x" + "ab" * 32,
+            "tickLower": -60,
+            "tickUpper": 60,
+            "liquidity": 10**18,
+            "feeGrowthInside0": 2000,
+            "feeGrowthInside1": 2000,
+            "token0": {"address": "0x" + "00" * 20, "decimals": 18, "symbol": "X"},
+            "token1": {"address": valuation.USDG, "decimals": 6, "symbol": "USDG"},
+            "sqrtPriceX96": 2**96,
+        }
+        originals = (snapshots.oldest_within, snapshots.record, valuation._rpc_window)
+        try:
+            snapshots.oldest_within = lambda *a, **k: (now - snapshot_age, 1000, 1000) if snapshot_age else None
+            snapshots.record = lambda *a, **k: None
+            valuation._rpc_window = (
+                (lambda *a, **k: ("rpc-archive", archive_window, (500, 500))) if archive_window else (lambda *a, **k: None)
+            )
+            return valuation._fee_rate(None, position, 1000.0, lookback_hours=24.0)
+        finally:
+            snapshots.oldest_within, snapshots.record, valuation._rpc_window = originals
+
+    def test_a_narrow_snapshot_does_not_beat_a_wide_archive_read(self):
+        """Our own snapshots are only ever as wide as our uptime. Letting any of them win meant a
+        service up for fifty minutes quoted a rent off fifty minutes, with a full day of history one
+        archive call away. Only visible once it was running."""
+        res = self._fee_rate_with(snapshot_age=2880, archive_window=24 * 3600)
+        self.assertEqual(res["source"], "rpc-archive")
+        self.assertEqual(res["windowSeconds"], 24 * 3600)
+
+    def test_a_snapshot_that_covers_the_window_is_kept(self):
+        # Exact, already held, and no round trip: no reason to ask a node for it.
+        res = self._fee_rate_with(snapshot_age=23 * 3600, archive_window=24 * 3600)
+        self.assertEqual(res["source"], "snapshot")
+
+    def test_a_narrow_snapshot_survives_an_archive_that_answers_nothing(self):
+        res = self._fee_rate_with(snapshot_age=2880, archive_window=None)
+        self.assertEqual(res["source"], "snapshot")
+        self.assertTrue(res["lowConfidence"])
 
     def test_the_fallback_never_widens_the_window(self):
         """Answering over more history than was asked for answers a different question, and the
