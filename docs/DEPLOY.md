@@ -78,7 +78,24 @@ The service refuses to start if `WAITLIST_FILE` sits outside `WAITLIST_DATA_DIR`
 reason the paywall refuses an ephemeral ledger: a page that collects onto a disk about to be
 discarded looks like it works, and the list is empty when it is finally read.
 
-Read the list without opening any route on the public page:
+### Reading the list
+
+Nothing on the public page exposes it, so there is no route to guard and no token to leak. Both
+ways in go over Railway's SSH, which needs a key registered **once**:
+
+```bash
+railway ssh keys add
+```
+
+Run that from an interactive terminal if your key has a passphrase — it cannot be entered otherwise,
+and an agent or a script will fail with "No loadable SSH keys found". Then either download the file:
+
+```bash
+railway volume files -v landing-volume download /waitlist.jsonl ./waitlist.jsonl
+python3 landing/read_waitlist.py < waitlist.jsonl
+```
+
+or read it in place:
 
 ```bash
 railway ssh --service landing cat /data/waitlist.jsonl | python3 landing/read_waitlist.py
@@ -86,6 +103,7 @@ railway ssh --service landing cat /data/waitlist.jsonl | python3 landing/read_wa
 
 `--count` prints just the number, `--emails` just the addresses. Duplicates are removed on the way
 out rather than on the way in, so the timestamp shown is when that person first joined.
+`railway volume files browse /` is an interactive file browser over the same volume.
 
 ### Or a webhook
 
