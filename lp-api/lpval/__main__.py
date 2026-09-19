@@ -18,8 +18,10 @@ def _find(rpc: Rpc, scan: int, min_usdg: float, max_found: int = 8, wide: bool =
     nxt = abi.words(rpc.eth_calls([(POSM, abi.call_data("nextTokenId()"))])[0])[0]
     ids = list(range(nxt - 1, max(0, nxt - 1 - scan), -1))
     found = []
-    for i in range(0, len(ids), 50):
-        chunk = ids[i:i + 50]
+    # Two eth_calls per id. The node rate-limits well before 200 calls in one batch, so keep a
+    # wide margin: a scan is a background convenience, not something worth a 429 for.
+    for i in range(0, len(ids), 20):
+        chunk = ids[i:i + 20]
         calls = []
         for tid in chunk:
             calls.append((POSM, abi.call_data("getPoolAndPositionInfo(uint256)", abi.enc_uint(tid))))
