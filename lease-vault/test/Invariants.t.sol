@@ -2,7 +2,6 @@
 pragma solidity ^0.8.26;
 
 import {MiniTest} from "./utils/MiniTest.sol";
-import {AssetRegistry} from "../src/AssetRegistry.sol";
 import {LeaseVault} from "../src/LeaseVault.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
 import {IPositionManager} from "../src/interfaces/IPositionManager.sol";
@@ -24,33 +23,27 @@ contract InvariantsTest is MiniTest {
     MockPausableERC20 stock;
     MockPositionManager posm;
     MockStateView stateView;
-    AssetRegistry registry;
     LeaseVault vault;
 
     address seller = makeAddr("seller");
     address financier = makeAddr("financier");
     address financier2 = makeAddr("financier2");
-    address feeRecipient = makeAddr("feeRecipient");
     address keeper = makeAddr("keeper");
 
     PoolKey key;
     uint256 tokenId;
     uint32 constant TERM = 7 days;
-    uint128 constant FEE = 2_000_000;
+    uint32 constant GRACE = 48 hours;
 
     function setUp() public {
         usdg = new MockERC20("Global Dollar", "USDG", 6);
         stock = new MockPausableERC20("NVDA Stock Token", "NVDAx");
         posm = new MockPositionManager();
         stateView = new MockStateView();
-        registry = new AssetRegistry(address(this), feeRecipient, 5_000_000);
-        vault = new LeaseVault(IERC20(address(usdg)), IPositionManager(address(posm)), IStateView(address(stateView)), registry);
+        vault = new LeaseVault(IERC20(address(usdg)), IPositionManager(address(posm)), IStateView(address(stateView)));
 
         (address c0, address c1) = address(stock) < address(usdg) ? (address(stock), address(usdg)) : (address(usdg), address(stock));
         key = PoolKey(Currency.wrap(c0), Currency.wrap(c1), 3000, 60, address(0));
-        registry.setPool(PoolId.unwrap(key.toId()), true, 1, 1, 1_000, bytes32(0));
-        registry.setTerm(TERM, true);
-        registry.setListingFee(FEE);
         stateView.setTick(PoolId.unwrap(key.toId()), 0);
         tokenId = posm.mint(seller, key, -600, 600, 10_000);
 
@@ -69,7 +62,7 @@ contract InvariantsTest is MiniTest {
     /// @dev The vault must always hold at least what it says it owes.
     function _assertSolvent() internal view {
         uint256 owed = vault.balances(seller) + vault.balances(financier) + vault.balances(financier2)
-            + vault.balances(feeRecipient) + vault.balances(keeper);
+            + vault.balances(keeper);
         assertGe(usdg.balanceOf(address(vault)), owed);
     }
 
@@ -103,12 +96,26 @@ contract InvariantsTest is MiniTest {
     function testFuzz_sequencesKeepTheVaultSolvent(uint8[16] memory acts, uint16[16] memory jumps, uint96 rawPrice, uint96 rawRent, uint96 rawBuyback)
         public
     {
-        uint128 price = uint128(_bound(rawPrice, FEE + 2, 1e12));
-        uint128 rent = uint128(_bound(rawRent, 0, price - FEE - 1));
-        uint128 buyback = uint128(_bound(rawBuyback, 0, 1e12));
+        uint128 price = uint128(_bound(rawPrice, 2, 1e12));
+        uint128 rent = uint128(_bound(rawRent, 0, price - 1));
+        // Capped at the price so most sequences actually run. Left free, half of them were refused
+        // at the listing and the fuzz stopped exploring what it is here for; the refusal itself has
+        // its own test. Zero is still reachable, so some runs exercise the rejected path too.
+        uint128 buyback = uint128(_bound(rawBuyback, 0, price));
+
+        LeaseVault.Terms memory t = LeaseVault.Terms({
+            price: price,
+            rent: rent,
+            buybackPrice: buyback,
+            term: TERM,
+            grace: GRACE,
+            listingDuration: 1 days,
+            maxFrozenBps: 2_500,
+            freezeProbe: 1
+        });
 
         vm.prank(seller);
-        try vault.list(tokenId, price, rent, buyback, TERM, 1 days) returns (uint256 id) {
+        try vault.list(tokenId, t) returns (uint256 id) {
             _assertSolvent();
             _assertDealSane(id);
             for (uint256 i; i < acts.length; ++i) {
@@ -121,7 +128,6 @@ contract InvariantsTest is MiniTest {
             _drain(seller);
             _drain(financier);
             _drain(financier2);
-            _drain(feeRecipient);
             _assertSolvent();
         } catch {
             // A rejected listing is a valid outcome; nothing should have moved.

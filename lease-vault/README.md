@@ -28,7 +28,7 @@ claim on the underlying share, and barred from US persons. Two consequences:
 
 Both criteria point the same way. For v1 the allowlist is limited to crypto pairs judged
 permissible, WETH/USDG for instance, and later to full-rights tokenised equities once they exist on
-the chain. The registry carries an `assetClass` and a `screeningRef` so that decision is recorded
+the chain. The screening list carries an `assetClass` and a `screeningRef` so that decision is recorded
 pair by pair.
 
 ## How it works
@@ -51,7 +51,7 @@ upgrade path.
 
 ```
 src/LeaseVault.sol          the core contract, no owner
-src/AssetRegistry.sol       pool allowlist, terms, grace window, flat fee
+src/ScreeningList.sol       a published opinion about which pools are fit to deal in, read by nobody
 src/interfaces/             minimal surfaces of PositionManager, StateView, ERC-20
 src/libraries/Types.sol     v4 types copied over, PositionInfo decoding, actions
 test/LeaseVault.t.sol       unit tests
@@ -84,11 +84,16 @@ Before any deployment, confirm the hardcoded addresses are still what they claim
 ./verify-addresses.sh
 ```
 
-Deployment:
+Deployment. The vault takes no owner and no parameters of its own, so there is nothing to configure
+afterwards and nobody to ask:
 
 ```bash
-REGISTRY_OWNER=0x... FEE_RECIPIENT=0x... forge script script/Deploy.s.sol --rpc-url robinhood --broadcast --verify
+forge script script/Deploy.s.sol --rpc-url robinhood --broadcast --verify
 ```
+
+Add `SCREENING_OWNER=0x...` to deploy a `ScreeningList` beside it. That is a separate contract
+publishing one party's opinion of which pools are fit to deal in; the vault never reads it, and
+leaving it out changes nothing about how the vault behaves.
 
 ## Addresses used on Robinhood Chain (4663)
 

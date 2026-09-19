@@ -2,7 +2,6 @@
 pragma solidity ^0.8.26;
 
 import {MiniTest} from "./utils/MiniTest.sol";
-import {AssetRegistry} from "../src/AssetRegistry.sol";
 import {LeaseVault} from "../src/LeaseVault.sol";
 import {IERC20} from "../src/interfaces/IERC20.sol";
 import {IPositionManager} from "../src/interfaces/IPositionManager.sol";
@@ -19,13 +18,11 @@ contract LeaseVaultTest is MiniTest {
     MockPausableERC20 stock;
     MockPositionManager posm;
     MockStateView stateView;
-    AssetRegistry registry;
     LeaseVault vault;
 
     address seller = makeAddr("seller");
     address financier = makeAddr("financier");
     address financier2 = makeAddr("financier2");
-    address feeRecipient = makeAddr("feeRecipient");
 
     PoolKey key;
     bytes32 poolId;
@@ -34,7 +31,6 @@ contract LeaseVaultTest is MiniTest {
     uint128 constant PRICE = 1_000_000_000; // 1,000 USDG (6 decimals)
     uint128 constant RENT = 7_000_000; // 7 USDG for the term, i.e. 1 USDG / day over 7 days
     uint128 constant BUYBACK = 1_000_000_000; // 1,000 USDG
-    uint128 constant FEE = 2_000_000; // flat 2 USDG
     uint32 constant TERM = 7 days;
     uint32 constant GRACE = 48 hours;
 
@@ -43,12 +39,8 @@ contract LeaseVaultTest is MiniTest {
         stock = new MockPausableERC20("NVDA Stock Token", "NVDAx");
         posm = new MockPositionManager();
         stateView = new MockStateView();
-        registry = new AssetRegistry(address(this), feeRecipient, 5_000_000);
         vault = new LeaseVault(
-            IERC20(address(usdg)),
-            IPositionManager(address(posm)),
-            IStateView(address(stateView)),
-            registry
+            IERC20(address(usdg)), IPositionManager(address(posm)), IStateView(address(stateView))
         );
 
         // currency0 < currency1 as in v4
@@ -58,9 +50,6 @@ contract LeaseVaultTest is MiniTest {
         key = PoolKey(Currency.wrap(c0), Currency.wrap(c1), 3000, 60, address(0));
         poolId = PoolId.unwrap(key.toId());
 
-        registry.setPool(poolId, true, 1, 1, 1_000, keccak256("screening-v1"));
-        registry.setTerm(TERM, true);
-        registry.setListingFee(FEE);
         stateView.setTick(poolId, 0);
 
         tokenId = posm.mint(seller, key, -600, 600, 10_000);
@@ -80,9 +69,24 @@ contract LeaseVaultTest is MiniTest {
 
     // ------------------------------------------------------------------ helpers
 
+    /// The offer every test starts from. Terms belong to the deal now, so a test that cares about
+    /// one of them copies this and changes it, instead of reaching for a global setting.
+    function _terms() internal pure returns (LeaseVault.Terms memory) {
+        return LeaseVault.Terms({
+            price: PRICE,
+            rent: RENT,
+            buybackPrice: BUYBACK,
+            term: TERM,
+            grace: GRACE,
+            listingDuration: 1 days,
+            maxFrozenBps: 2_500,
+            freezeProbe: 1
+        });
+    }
+
     function _list() internal returns (uint256 id) {
         vm.prank(seller);
-        id = vault.list(tokenId, PRICE, RENT, BUYBACK, TERM, 1 days);
+        id = vault.list(tokenId, _terms());
     }
 
     function _listAndFund() internal returns (uint256 id) {
@@ -98,65 +102,118 @@ contract LeaseVaultTest is MiniTest {
         assertEq(posm.ownerOf(tokenId), address(vault));
         LeaseVault.Deal memory d = vault.deal(id);
         assertEq(uint256(d.state), uint256(LeaseVault.State.Listed));
-        assertEq(uint256(d.listingFee), uint256(FEE));
         assertEq(uint256(d.grace), uint256(GRACE));
+        assertEq(uint256(d.maxFrozenBps), 2_500);
+        assertEq(uint256(d.freezeProbe), 1);
         assertEq(d.seller, seller);
     }
 
-    function test_list_rejectsPoolNotAllowed() public {
-        registry.setPool(poolId, false, 0, 0, 0, bytes32(0));
+    /// Nothing anywhere decides which pools deserve to be dealt in. Whoever is parting with money
+    /// decides that, one layer up, and can change their mind without asking this contract.
+    function test_list_needsNobodysPermission() public {
+        MockERC20 anything = new MockERC20("Whatever", "WHT", 18);
+        (address c0, address c1) = address(anything) < address(usdg)
+            ? (address(anything), address(usdg))
+            : (address(usdg), address(anything));
+        PoolKey memory k = PoolKey(Currency.wrap(c0), Currency.wrap(c1), 3000, 60, address(0));
+        stateView.setTick(PoolId.unwrap(k.toId()), 0);
+        uint256 tid = posm.mint(seller, k, -600, 600, 10_000);
         vm.prank(seller);
-        vm.expectRevert(LeaseVault.PoolNotAllowed.selector);
-        vault.list(tokenId, PRICE, RENT, BUYBACK, TERM, 1 days);
+        posm.approve(address(vault), tid);
+
+        vm.prank(seller);
+        uint256 id = vault.list(tid, _terms());
+        assertEq(uint256(vault.deal(id).state), uint256(LeaseVault.State.Listed));
     }
 
     function test_list_rejectsOutOfRange() public {
         stateView.setTick(poolId, 600);
         vm.prank(seller);
         vm.expectRevert(LeaseVault.OutOfRange.selector);
-        vault.list(tokenId, PRICE, RENT, BUYBACK, TERM, 1 days);
+        vault.list(tokenId, _terms());
     }
 
     function test_list_rejectsSubscriber() public {
         posm.setSubscribed(tokenId, true);
         vm.prank(seller);
         vm.expectRevert(LeaseVault.HasSubscriber.selector);
-        vault.list(tokenId, PRICE, RENT, BUYBACK, TERM, 1 days);
+        vault.list(tokenId, _terms());
     }
 
-    function test_list_rejectsLowLiquidity() public {
-        posm.setLiquidity(tokenId, 10);
+    /// An empty position has no usufruct to lease, which is the substance of the whole deal. How
+    /// much liquidity is worth financing is a different question, and not one for this contract.
+    function test_list_rejectsEmptyPosition() public {
+        posm.setLiquidity(tokenId, 0);
         vm.prank(seller);
-        vm.expectRevert(LeaseVault.LiquidityTooLow.selector);
-        vault.list(tokenId, PRICE, RENT, BUYBACK, TERM, 1 days);
+        vm.expectRevert(LeaseVault.NoLiquidity.selector);
+        vault.list(tokenId, _terms());
     }
 
-    function test_list_rejectsRentPlusFeeAtOrAbovePrice() public {
+    function test_list_rejectsRentAtOrAbovePrice() public {
+        LeaseVault.Terms memory t = _terms();
+        t.price = RENT;
         vm.prank(seller);
         vm.expectRevert(LeaseVault.BadEconomics.selector);
-        vault.list(tokenId, 9_000_000, RENT, BUYBACK, TERM, 1 days);
+        vault.list(tokenId, t);
     }
 
     /// The financier is paid for the use of the asset, not for the passage of time. A buyback above
     /// the sale price is a guaranteed spread on top of the rent, which is a financing cost wearing
     /// the clothes of a sale. There is no owner here to forbid it later, so the code does.
     function test_list_rejectsBuybackAboveSale() public {
+        LeaseVault.Terms memory t = _terms();
+        t.buybackPrice = PRICE + 1;
         vm.prank(seller);
         vm.expectRevert(LeaseVault.BuybackAboveSale.selector);
-        vault.list(tokenId, PRICE, RENT, PRICE + 1, TERM, 1 days);
+        vault.list(tokenId, t);
     }
 
     function test_list_allowsBuybackBelowSale() public {
         // Only the financier is worse off, and only by their own choice to fund it.
+        LeaseVault.Terms memory t = _terms();
+        t.buybackPrice = PRICE - 1;
         vm.prank(seller);
-        uint256 id = vault.list(tokenId, PRICE, RENT, PRICE - 1, TERM, 1 days);
+        uint256 id = vault.list(tokenId, t);
         assertEq(uint256(vault.deal(id).buybackPrice), uint256(PRICE - 1));
     }
 
-    function test_list_rejectsUnallowedTerm() public {
+    /// The bounds are constants. Nobody can be talked into widening them, and a financier who has
+    /// read this file once knows the worst offer they can ever be shown.
+    function test_list_rejectsTermsOutsideTheConstantBounds() public {
+        LeaseVault.Terms memory t = _terms();
+
+        t.term = vault.MAX_TERM() + 1;
         vm.prank(seller);
-        vm.expectRevert(LeaseVault.TermNotAllowed.selector);
-        vault.list(tokenId, PRICE, RENT, BUYBACK, 3 days, 1 days);
+        vm.expectRevert(LeaseVault.BadTerm.selector);
+        vault.list(tokenId, t);
+
+        t = _terms();
+        t.grace = vault.MIN_GRACE() - 1;
+        vm.prank(seller);
+        vm.expectRevert(LeaseVault.BadGrace.selector);
+        vault.list(tokenId, t);
+
+        // A high figure suits the seller, who picks it, so the ceiling is what protects the other side.
+        t = _terms();
+        t.maxFrozenBps = vault.MAX_FROZEN_BPS() + 1;
+        vm.prank(seller);
+        vm.expectRevert(LeaseVault.BadFrozenCap.selector);
+        vault.list(tokenId, t);
+
+        t = _terms();
+        t.freezeProbe = 2;
+        vm.prank(seller);
+        vm.expectRevert(LeaseVault.BadProbe.selector);
+        vault.list(tokenId, t);
+    }
+
+    /// A term this contract used to refuse because an owner had not enabled it.
+    function test_list_acceptsAnyTermInsideTheBounds() public {
+        LeaseVault.Terms memory t = _terms();
+        t.term = 3 days;
+        vm.prank(seller);
+        uint256 id = vault.list(tokenId, t);
+        assertEq(uint256(vault.deal(id).term), 3 days);
     }
 
     function test_cancel_returnsNft() public {
@@ -170,10 +227,10 @@ contract LeaseVaultTest is MiniTest {
 
     // ------------------------------------------------------------------ funding
 
-    function test_fund_paysSellerNetOfRentAndFlatFee() public {
+    function test_fund_paysSellerNetOfRentAndNothingElse() public {
         uint256 id = _listAndFund();
-        assertEq(vault.balances(seller), PRICE - RENT - FEE);
-        assertEq(vault.balances(feeRecipient), FEE);
+        // No protocol fee exists. Nothing is taken between the financier and the seller.
+        assertEq(vault.balances(seller), PRICE - RENT);
         assertEq(usdg.balanceOf(address(vault)), PRICE);
         LeaseVault.Deal memory d = vault.deal(id);
         assertEq(d.financier, financier);
@@ -181,7 +238,7 @@ contract LeaseVaultTest is MiniTest {
 
         vm.prank(seller);
         vault.withdrawUSDG();
-        assertEq(usdg.balanceOf(seller), 10_000_000_000 + PRICE - RENT - FEE);
+        assertEq(usdg.balanceOf(seller), 10_000_000_000 + PRICE - RENT);
     }
 
     function test_fund_rejectsSelfDeal() public {
@@ -270,7 +327,7 @@ contract LeaseVaultTest is MiniTest {
         vm.prank(financier);
         vault.release(id);
         assertEq(vault.balances(financier), expected);
-        assertEq(vault.balances(seller), PRICE - RENT - FEE + (RENT - expected));
+        assertEq(vault.balances(seller), PRICE - RENT + (RENT - expected));
     }
 
     /// Repeated checkpoints during brief halts cannot wipe out the rent: sampling cannot tell a
@@ -284,7 +341,7 @@ contract LeaseVaultTest is MiniTest {
             stock.setPaused(false);
         }
         vm.warp(block.timestamp + TERM);
-        // 25% of the term is the ceiling the registry set, so three quarters of the rent survives.
+        // 25% of the term is the ceiling these terms set, so three quarters of the rent survives.
         assertEq(uint256(vault.accruedRent(id)), RENT - RENT / 4);
     }
 
@@ -296,13 +353,12 @@ contract LeaseVaultTest is MiniTest {
             address(silent) < address(usdg) ? (address(silent), address(usdg)) : (address(usdg), address(silent));
         PoolKey memory k = PoolKey(Currency.wrap(c0), Currency.wrap(c1), 3000, 60, address(0));
         bytes32 pid = PoolId.unwrap(k.toId());
-        registry.setPool(pid, true, 1, 1, 1_000, bytes32(0));
         stateView.setTick(pid, 0);
         uint256 tid = posm.mint(seller, k, -600, 600, 10_000);
         vm.prank(seller);
         posm.approve(address(vault), tid);
         vm.prank(seller);
-        uint256 id = vault.list(tid, PRICE, RENT, BUYBACK, TERM, 1 days);
+        uint256 id = vault.list(tid, _terms());
         vm.prank(financier);
         vault.fund(id);
         vm.warp(block.timestamp + TERM);
@@ -334,14 +390,13 @@ contract LeaseVaultTest is MiniTest {
             address(bomb) < address(usdg) ? (address(bomb), address(usdg)) : (address(usdg), address(bomb));
         PoolKey memory bombKey = PoolKey(Currency.wrap(c0), Currency.wrap(c1), 3000, 60, address(0));
         bytes32 bombPool = PoolId.unwrap(bombKey.toId());
-        registry.setPool(bombPool, true, 1, 1, 1_000, bytes32(0));
         stateView.setTick(bombPool, 0);
         uint256 bombToken = posm.mint(seller, bombKey, -600, 600, 10_000);
         vm.prank(seller);
         posm.approve(address(vault), bombToken);
 
         vm.prank(seller);
-        uint256 id = vault.list(bombToken, PRICE, RENT, BUYBACK, TERM, 1 days);
+        uint256 id = vault.list(bombToken, _terms());
         vm.prank(financier);
         vault.fund(id);
 
@@ -383,7 +438,7 @@ contract LeaseVaultTest is MiniTest {
         vault.buyBack(id);
 
         assertEq(vault.balances(financier), uint256(BUYBACK) + RENT);
-        assertEq(vault.balances(seller), PRICE - RENT - FEE); // no refund
+        assertEq(vault.balances(seller), PRICE - RENT); // no refund
         vm.prank(seller);
         vault.withdrawPosition(tokenId);
         assertEq(posm.ownerOf(tokenId), seller);
@@ -396,7 +451,7 @@ contract LeaseVaultTest is MiniTest {
         vm.prank(seller);
         vault.buyBack(id);
         assertEq(vault.balances(financier), uint256(BUYBACK) + 2_000_000);
-        assertEq(vault.balances(seller), PRICE - RENT - FEE + 5_000_000);
+        assertEq(vault.balances(seller), PRICE - RENT + 5_000_000);
     }
 
     function test_buyBack_duringGrace_stillAllowed() public {
@@ -491,16 +546,27 @@ contract LeaseVaultTest is MiniTest {
         vault.claimRent(id);
         vm.prank(seller);
         vault.buyBack(id);
-        uint256 liabilities = vault.balances(seller) + vault.balances(financier) + vault.balances(feeRecipient);
+        uint256 liabilities = vault.balances(seller) + vault.balances(financier);
         assertEq(usdg.balanceOf(address(vault)), liabilities);
     }
 
-    function test_registryChangesDoNotAffectActiveDeal() public {
-        uint256 id = _listAndFund();
-        registry.setListingFee(5_000_000);
-        registry.setGrace(7 days);
-        LeaseVault.Deal memory d = vault.deal(id);
-        assertEq(uint256(d.listingFee), uint256(FEE));
-        assertEq(uint256(d.grace), uint256(GRACE));
+    /// Deals do not share settings, so there is no state anyone could change to reach into one
+    /// that is already running. This is what replaced reading a mutable registry at funding time.
+    function test_dealsDoNotShareTerms() public {
+        uint256 first = _listAndFund();
+
+        uint256 second = posm.mint(seller, key, -600, 600, 10_000);
+        vm.prank(seller);
+        posm.approve(address(vault), second);
+        LeaseVault.Terms memory t = _terms();
+        t.grace = 7 days;
+        t.maxFrozenBps = 0;
+        vm.prank(seller);
+        uint256 other = vault.list(second, t);
+
+        assertEq(uint256(vault.deal(first).grace), uint256(GRACE));
+        assertEq(uint256(vault.deal(first).maxFrozenBps), 2_500);
+        assertEq(uint256(vault.deal(other).grace), 7 days);
+        assertEq(uint256(vault.deal(other).maxFrozenBps), 0);
     }
 }

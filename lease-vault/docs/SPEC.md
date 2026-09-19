@@ -18,7 +18,7 @@ financier side, synthetic tokenised equities.
 |---|---|---|
 | Seller, then lessee | The liquidity provider who wants cash | The right to use the position (its swap fees) and a promise to sell it back |
 | Financier | The one who brings the cash | Ownership of the position NFT, transferable, and a fixed rent |
-| Registry | Admission policy, owner-managed | The pool allowlist, terms, grace window, a capped flat fee |
+| Screening list | A published opinion, owner-managed | Which pools its author considers fit to deal in. The vault never reads it and it has no power over any deal |
 | Vault | Execution, no owner | Escrow of the NFTs and the USDG, balances to withdraw |
 
 ## 3. Lifecycle
@@ -56,14 +56,14 @@ An example, USDG having 6 decimals.
 | Sale price | 1,815 USDG |
 | Total rent, 7 days | 9 USDG |
 | Buyback price | 1,815 USDG |
-| Flat protocol fee | 2 USDG |
-| Received by the seller at funding | 1,804 USDG |
+| Received by the seller at funding | 1,806 USDG |
 
 The financier earns 9 USDG of rent if the lease runs its course, about 0.5% over 7 days, plus 1,815
 at the buyback. If there is no buyback they keep a position worth whatever it is worth. The seller
-paid 2 USDG of fees and 9 USDG of rent for 1,815 USDG of cash, while collecting the week's swap fees.
+paid 9 USDG of rent for 1,815 USDG of cash, while collecting the week's swap fees. The vault takes
+nothing in between; see section 8 on where a fee would belong instead.
 
-Enforced in code: rent plus fee must be below the price, neither the rent nor the buyback price may
+Enforced in code: the rent must be below the price, neither the rent nor the buyback price may
 be zero, and **the buyback price may not exceed the sale price**. The financier is paid for the use
 of the asset, never for the passage of time; a buyback above the sale price would be a guaranteed
 spread on top of the rent, which is a financing cost wearing the clothes of a sale. The seller sets
@@ -80,25 +80,26 @@ never compounds and the contract never annualises it.
 
 The lessor carries an owner's risk. In v1 that risk is expressed through freezes: on every
 interaction and on every `checkpointFreeze`, the vault asks each token of the pair whether it is
-paused, using the probe the registry recorded for that pool. Frozen seconds are removed from the rent
+paused, using the probe the seller named in the terms. Frozen seconds are removed from the rent
 base and refunded to the lessee at settlement. The calendar term itself does not stretch.
 
-Two bounds sit on that, and the second one is a policy choice the committee owns.
+Two bounds sit on that.
 
 A freeze counts for at most `MAX_FREEZE_GAP` (6 hours) beyond the last time it was actually
 observed, so nobody can open one and let it run unattended.
 
-On top of that, a deal may credit at most `maxFrozenBps` of its term as frozen, 25% by default.
+On top of that, a deal credits at most `maxFrozenBps` of its term as frozen. The seller names that
+figure in the terms and the vault refuses anything above `MAX_FROZEN_BPS`, a constant at 50%.
 Sampling cannot distinguish "frozen all week, observed every six hours" from "halted for one second
 at each of those instants", so without a total ceiling a lessee who checkpoints during repeated
-brief halts could wipe out the rent for a few dozen cheap transactions. The ceiling is what makes
-the financier's downside something they can read and price before they fund.
+brief halts could wipe out the rent for a few dozen cheap transactions. A high figure suits the
+seller, who chooses it, which is exactly why the ceiling is a constant rather than a setting: the
+financier reads the offer, reads this file once, and needs nobody's word for the rest.
 
-The cost of that ceiling is real and points the other way: a pair that genuinely halts for longer
-than the ceiling makes the lessee pay rent for time the asset was unusable. For the v1 allowlist,
-crypto pairs that never halt, 25% is slack. Tokenised equities halt every night and every weekend,
-which is well past it, so allowlisting such a pair means raising `maxFrozenBps` and accepting the
-sampling exposure that comes with it, or redesigning the freeze evidence entirely.
+The cost points the other way: a pair that genuinely halts for longer than the figure agreed makes
+the lessee pay rent for time the asset was unusable. For crypto pairs that never halt, 25% is
+already slack. Tokenised equities halt every night and every weekend, which is past even the 50%
+ceiling, so financing one means either accepting that or redesigning the freeze evidence entirely.
 
 Known limit: a position destroyed by an exploit in the pool is not detectable generically on chain.
 In that case the financier owns a worthless position and the lessee owes nothing more, which is the
@@ -110,13 +111,13 @@ expected outcome for a lease.
 |---|---|---|
 | A real sale, with ownership transferred | The NFT is recorded to the financier at `fund`, transferable via `transferFinancierPosition`, delivered by `release` with no "claim" step | AAOIFI 9, 3/1; 2008 sukuk statement |
 | The lessor carries the asset risk | Rent suspended while frozen, the unaccrued part refunded; no claim on the lessee if the asset is destroyed | AAOIFI 9, 5/1/7 |
-| Rent for a real usufruct | The lessee collects the swap fees through `collectFees`; the position must be in range at listing and at funding, and above a minimum liquidity | AAOIFI 9, 5/1 |
+| Rent for a real usufruct | The lessee collects the swap fees through `collectFees`; the position must be in range at listing and at funding, and hold some liquidity | AAOIFI 9, 5/1 |
 | No 'inah | Sale and lease are two acts settled in order inside `fund`; the financier cannot transfer to the lessee except through `buyBack`. The `SelfDeal` check compares addresses: it stops the obvious self-funding, not a seller using a second address. No on-chain check can do better, and the committee should weigh that | OIC Fiqh Academy, res. 66; AAOIFI 9, 3/2 |
-| Buyback by unilateral promise, at a price fixed in advance | `buyBack` at `buybackPrice`, exercised at the lessee's sole discretion | AAOIFI 2008 statement on ijarah sukuk, provided the lessor bears total loss |
+| Buyback by unilateral promise, at a price fixed in advance and never above the sale price | `buyBack` at `buybackPrice`, exercised at the lessee's sole discretion; `list` refuses a buyback above the price, so the financier can never earn a spread on the capital | AAOIFI 2008 statement on ijarah sukuk, provided the lessor bears total loss |
 | No ghalaq ar-rahn | There is no pledge: the financier keeps nothing, they take delivery of what is theirs | Hadith "la yughlaq ar-rahn" |
-| A service fee at cost, not a percentage | `listingFee` is a flat amount, capped when the registry is deployed, snapshotted into the deal | AAOIFI 19 on qard fees, by analogy |
+| No fee taken between the parties | The vault charges nothing. A service fee, if any, is charged by whatever is built on top, for a service actually rendered | AAOIFI 19 on qard fees, by analogy |
 | No oracle, no liquidation | No price is read in the deal path; `StateView` only checks the range at listing and at funding | Product principle |
-| Permissible assets | Allowlist per pool, with `assetClass` and `screeningRef` | AAOIFI 21 screening for equities |
+| Permissible assets | Not the vault's business. A screening list carries `assetClass` and `screeningRef` per pool, and whoever funds a deal decides what to consult | AAOIFI 21 screening for equities |
 
 Open points for a committee to settle:
 
@@ -131,6 +132,28 @@ Open points for a committee to settle:
    transfers; some committees prefer the buyback price plus the remaining rent.
 4. Whether an LP position on a crypto pair counts as productive. Swap fees are payment for a market
    service; permissibility depends on both tokens and on the pool containing no lending mechanism.
+
+## 6b. Why the vault is this small
+
+`LeaseVault` has no owner, no pause, no upgrade path and no reference to any other contract. Once
+deployed there is nothing left to configure and nobody left to ask. Every term of a deal is proposed
+by the seller within bounds that are constants in the source, and accepted by the financier in the
+act of funding it. There is no third party to the agreement.
+
+That costs something and it is worth naming. The vault holds no view on which pools deserve to be
+dealt in, so the compliance work in section 6 is not enforced by the bottom layer. It cannot be: an
+allowlist welded into an immutable contract is either frozen forever or governed by somebody, and
+governed means an address that can strand a position a seller has already handed over.
+
+So the judgement moves to where the money is. A financier consults whatever they trust before
+funding. `ScreeningList` is one such published opinion, owner-managed, recording `assetClass` and
+`screeningRef` per pool; the vault never reads it, and removing a pool from it stops nothing already
+running. Anyone who disagrees deploys their own list and points their own capital at it.
+
+The layer above is where the product lives, and where a fee belongs: a vault pooling financier
+capital that funds only what its curator approves, a front end that declines to show the rest, a
+matching service. Each of those renders a service somebody can price. A toll on the primitive itself
+could never be removed once it is immutable, and would be harder to defend as a fee at cost.
 
 ## 7. Regulatory context, as of September 2026
 

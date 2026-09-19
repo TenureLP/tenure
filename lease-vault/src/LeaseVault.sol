@@ -6,7 +6,6 @@ import {IPositionManager} from "./interfaces/IPositionManager.sol";
 import {IStateView} from "./interfaces/IStateView.sol";
 import {SafeERC20} from "./libraries/SafeERC20.sol";
 import {Currency, PoolId, PoolKey, PoolIdLib, PositionInfoLib, Actions} from "./libraries/Types.sol";
-import {AssetRegistry} from "./AssetRegistry.sol";
 
 /// @title LeaseVault
 /// @notice Sale-and-leaseback of Uniswap v4 liquidity positions, with a buyback promise.
@@ -25,12 +24,24 @@ import {AssetRegistry} from "./AssetRegistry.sol";
 ///  - The lessee can only collect fees; liquidity can never be decreased during the lease.
 ///  - Rent is prepaid into escrow and streamed per usable second. Unaccrued rent is refunded on
 ///    early buyback and on frozen periods. Rent is a fixed amount, never compounding.
-///  - The protocol fee is a flat amount snapshotted at listing, never a percentage.
+///  - The buyback price can never exceed the sale price, so the financier is paid for the use of
+///    the asset and never for the passage of time.
 ///  - No oracle, no liquidation, no forced sale. All payouts are pull-based balances.
 ///  - The seller can never be the financier of their own deal.
 ///
-/// The contract has no owner and no upgrade path. The only external policy input is the registry,
-/// read at listing time and snapshotted into the deal.
+/// There is no owner, no upgrade path, no pause, and no external contract whose state can change
+/// what this one does. Every term of a deal is proposed by the seller within bounds fixed here as
+/// constants, and accepted by the financier in the act of funding it. Nobody else is a party.
+///
+/// That is deliberate, and it means this contract holds no opinion about which pools are worth
+/// dealing in. Screening belongs to whoever is choosing to put money in: a curator publishing a
+/// list, a vault funding only what it approves of, a front end refusing to show the rest. Any of
+/// them can be built on top and replaced without asking, which is not true of a gate welded into
+/// the bottom layer. `ScreeningList` in this repository is one such list, and this contract does
+/// not read it.
+///
+/// There is no protocol fee. A toll on a neutral primitive cannot be removed once it is immutable,
+/// and it is the layer above that performs a service worth charging for.
 contract LeaseVault {
     using SafeERC20 for IERC20;
     using PoolIdLib for PoolKey;
@@ -58,10 +69,8 @@ contract LeaseVault {
         Currency currency1;
         uint128 price; // sale price paid by the financier
         uint128 rent; // total rent for the full term, prepaid from proceeds
-        uint128 buybackPrice; // price at which the financier promises to sell back
-        uint128 listingFee; // flat protocol fee snapshotted at listing
+        uint128 buybackPrice; // price at which the financier promises to sell back, never above price
         uint128 rentClaimed; // rent already credited to the financier
-        address feeRecipient; // snapshotted at listing, like every other registry input
         uint32 term;
         uint32 grace;
         uint40 listingExpiry;
@@ -70,8 +79,20 @@ contract LeaseVault {
         uint40 pausedSeenAt; // last instant the freeze was actually observed
         uint40 pausedTotal; // cumulative frozen seconds already closed
         uint16 maxFrozenBps; // ceiling on total frozen time, as a fraction of the term
-        uint8 freezeProbe; // how to ask the pair whether it is frozen, from the registry
+        uint8 freezeProbe; // how to ask the pair whether it is frozen
         State state;
+    }
+
+    /// @notice What the seller offers. The financier accepts all of it, unchanged, by funding.
+    struct Terms {
+        uint128 price; // what the financier pays
+        uint128 rent; // total rent for the whole term, deducted from the proceeds and escrowed
+        uint128 buybackPrice; // never above `price`
+        uint32 term; // lease duration in seconds
+        uint32 grace; // extra time to buy back after the term ends
+        uint32 listingDuration; // how long this offer stays open for funding
+        uint16 maxFrozenBps; // ceiling on frozen time credited, as a fraction of the term
+        uint8 freezeProbe; // 0 never asks the pair whether it is frozen, 1 calls paused()
     }
 
     /// @notice Longest stretch of frozen time credited beyond the last observation.
@@ -85,6 +106,18 @@ contract LeaseVault {
     ///         honest `paused()` behind a proxy with a few cold reads already costs 15k.
     uint256 private constant PROBE_GAS = 100_000;
 
+    /// @notice Bounds on what a seller may propose. Constants, not settings: an immutable contract
+    ///         cannot be talked into widening them later, and a financier reading this file once
+    ///         knows what the worst admissible offer looks like without trusting anybody.
+    uint32 public constant MIN_TERM = 1 days;
+    uint32 public constant MAX_TERM = 30 days;
+    uint32 public constant MIN_GRACE = 24 hours;
+    uint32 public constant MAX_GRACE = 7 days;
+    uint32 public constant MAX_LISTING_DURATION = 30 days;
+    /// @notice At most half a term may ever be credited as frozen. The seller picks the figure and
+    ///         benefits from a high one, so the ceiling is the financier's guarantee, not a policy.
+    uint16 public constant MAX_FROZEN_BPS = 5_000;
+
     // ---------------------------------------------------------------------
     // Immutables / storage
     // ---------------------------------------------------------------------
@@ -92,7 +125,6 @@ contract LeaseVault {
     IERC20 public immutable usdg;
     IPositionManager public immutable posm;
     IStateView public immutable stateView;
-    AssetRegistry public immutable registry;
 
     uint256 public dealCount;
     mapping(uint256 dealId => Deal) private _deals;
@@ -120,7 +152,7 @@ contract LeaseVault {
         uint40 listingExpiry
     );
     event Cancelled(uint256 indexed dealId);
-    event Funded(uint256 indexed dealId, address indexed financier, uint40 fundedAt, uint128 listingFee);
+    event Funded(uint256 indexed dealId, address indexed financier, uint40 fundedAt);
     event FeesCollected(uint256 indexed dealId, address indexed lessee);
     event RentClaimed(uint256 indexed dealId, address indexed financier, uint128 amount);
     event BoughtBack(uint256 indexed dealId, uint128 buybackPrice, uint128 rentAccrued, uint128 rentRefunded);
@@ -131,14 +163,15 @@ contract LeaseVault {
     event WithdrawnPosition(address indexed to, uint256 indexed tokenId);
 
     error Reentrancy();
-    error ListingsPaused();
-    error TermNotAllowed();
+    error BadTerm();
+    error BadGrace();
     error BadListingDuration();
+    error BadFrozenCap();
+    error BadProbe();
     error BadEconomics();
     error BuybackAboveSale();
-    error PoolNotAllowed();
     error HasSubscriber();
-    error LiquidityTooLow();
+    error NoLiquidity();
     error OutOfRange();
     error NotListed();
     error NotActive();
@@ -159,15 +192,13 @@ contract LeaseVault {
         _lock = 1;
     }
 
-    constructor(IERC20 usdg_, IPositionManager posm_, IStateView stateView_, AssetRegistry registry_) {
-        if (
-            address(usdg_) == address(0) || address(posm_) == address(0) || address(stateView_) == address(0)
-                || address(registry_) == address(0)
-        ) revert ZeroAddress();
+    constructor(IERC20 usdg_, IPositionManager posm_, IStateView stateView_) {
+        if (address(usdg_) == address(0) || address(posm_) == address(0) || address(stateView_) == address(0)) {
+            revert ZeroAddress();
+        }
         usdg = usdg_;
         posm = posm_;
         stateView = stateView_;
-        registry = registry_;
     }
 
     // ---------------------------------------------------------------------
@@ -204,74 +235,70 @@ contract LeaseVault {
     // Listing
     // ---------------------------------------------------------------------
 
-    /// @notice Offer a position for sale-and-leaseback.
-    /// @param tokenId         Uniswap v4 PositionManager NFT, approved to this vault.
-    /// @param price           Sale price the financier pays (USDG raw units).
-    /// @param rent            Total rent for the whole term, deducted from proceeds and escrowed.
-    /// @param buybackPrice    Price at which the financier promises to sell the position back.
-    /// @param term            Lease duration in seconds, must be allowlisted by the registry.
-    /// @param listingDuration Seconds the listing stays open for funding.
-    function list(
-        uint256 tokenId,
-        uint128 price,
-        uint128 rent,
-        uint128 buybackPrice,
-        uint32 term,
-        uint32 listingDuration
-    ) external nonReentrant returns (uint256 dealId) {
-        if (registry.listingsPaused()) revert ListingsPaused();
-        if (!registry.isTermAllowed(term)) revert TermNotAllowed();
-        if (listingDuration == 0 || listingDuration > registry.maxListingDuration()) revert BadListingDuration();
-        uint128 fee = registry.listingFee();
-        // A lease with no rent, or a buyback promise worth nothing, is not the contract this vault
-        // claims to settle. Both sides must give something.
-        if (price == 0 || rent == 0 || buybackPrice == 0 || uint256(rent) + fee >= price) revert BadEconomics();
-        // The financier is paid for the use of the asset, never for the passage of time. Left free,
-        // a buyback above the sale price is a guaranteed spread on top of the rent, which is a
-        // financing cost wearing the clothes of a sale. Nothing stops financiers from funding only
-        // the listings that carry one, so the restraint has to be in the code: there is no owner
-        // here to police it later.
-        if (buybackPrice > price) revert BuybackAboveSale();
+    /// @notice Offer a position for sale-and-leaseback, on terms of your own choosing.
+    /// @param tokenId Uniswap v4 PositionManager NFT, approved to this vault.
+    /// @param t       Every term of the deal. A financier who funds it accepts all of it as written.
+    /// @dev Nothing here consults any other contract for permission. The checks below are about
+    ///      whether this is the kind of agreement the vault can actually settle, not about whether
+    ///      the pool is one somebody approves of; that judgement belongs to whoever is deciding to
+    ///      part with money, one layer up.
+    function list(uint256 tokenId, Terms calldata t) external nonReentrant returns (uint256 dealId) {
+        _requireSaneTerms(t);
 
         dealId = ++dealCount;
         Deal storage d = _deals[dealId];
-        uint8 probe;
-        (d.poolId, d.currency0, d.currency1, probe) = _checkEligible(tokenId);
-        d.freezeProbe = probe;
+        (d.poolId, d.currency0, d.currency1) = _checkEligible(tokenId);
 
         posm.transferFrom(msg.sender, address(this), tokenId);
         if (posm.ownerOf(tokenId) != address(this)) revert PositionNotHeld();
 
         d.seller = msg.sender;
         d.tokenId = tokenId;
-        d.price = price;
-        d.rent = rent;
-        d.buybackPrice = buybackPrice;
-        d.listingFee = fee;
-        d.feeRecipient = registry.feeRecipient();
-        d.maxFrozenBps = registry.maxFrozenBps();
-        d.term = term;
-        d.grace = registry.grace();
-        d.listingExpiry = uint40(block.timestamp + listingDuration);
+        d.price = t.price;
+        d.rent = t.rent;
+        d.buybackPrice = t.buybackPrice;
+        d.term = t.term;
+        d.grace = t.grace;
+        d.maxFrozenBps = t.maxFrozenBps;
+        d.freezeProbe = t.freezeProbe;
+        d.listingExpiry = uint40(block.timestamp + t.listingDuration);
         d.state = State.Listed;
 
         _emitListed(dealId);
     }
 
-    /// @dev Admission checks: allowlisted pool, no subscriber, enough liquidity, in range.
-    function _checkEligible(uint256 tokenId)
-        private
-        view
-        returns (bytes32 poolId, Currency c0, Currency c1, uint8 freezeProbe)
-    {
+    /// @dev The bounds a seller may propose within. Every one of them is a constant, so a financier
+    ///      reading this file once knows the worst offer they can ever be shown.
+    function _requireSaneTerms(Terms calldata t) private pure {
+        if (t.term < MIN_TERM || t.term > MAX_TERM) revert BadTerm();
+        if (t.grace < MIN_GRACE || t.grace > MAX_GRACE) revert BadGrace();
+        if (t.listingDuration == 0 || t.listingDuration > MAX_LISTING_DURATION) revert BadListingDuration();
+        // The seller sets this and a high figure suits them, so the ceiling is what the financier
+        // relies on. Above it, a lease could refund most of its own rent.
+        if (t.maxFrozenBps > MAX_FROZEN_BPS) revert BadFrozenCap();
+        if (t.freezeProbe > 1) revert BadProbe();
+        // A lease with no rent, or a buyback promise worth nothing, is not the contract this vault
+        // claims to settle. Both sides must give something.
+        if (t.price == 0 || t.rent == 0 || t.buybackPrice == 0 || t.rent >= t.price) revert BadEconomics();
+        // The financier is paid for the use of the asset, never for the passage of time. Left free,
+        // a buyback above the sale price is a guaranteed spread on top of the rent, which is a
+        // financing cost wearing the clothes of a sale. Nothing stops financiers from funding only
+        // the listings that carry one, so the restraint has to be in the code: there is no owner
+        // here to police it later.
+        if (t.buybackPrice > t.price) revert BuybackAboveSale();
+    }
+
+    /// @dev Whether this position can be leased at all: nobody else hooked onto it, something in
+    ///      it, and earning. Not a judgement about the pool.
+    function _checkEligible(uint256 tokenId) private view returns (bytes32 poolId, Currency c0, Currency c1) {
         (PoolKey memory key, uint256 info) = posm.getPoolAndPositionInfo(tokenId);
         poolId = PoolId.unwrap(key.toId());
-        AssetRegistry.PoolConfig memory cfg = registry.poolConfig(poolId);
-        if (!cfg.allowed) revert PoolNotAllowed();
         if (info.hasSubscriber()) revert HasSubscriber();
-        if (posm.getPositionLiquidity(tokenId) < cfg.minLiquidity) revert LiquidityTooLow();
+        // An empty position has no usufruct to lease, which is the whole substance of the deal.
+        // How much liquidity is worth financing is the financier's question, not this contract's.
+        if (posm.getPositionLiquidity(tokenId) == 0) revert NoLiquidity();
         _requireInRange(tokenId, poolId);
-        return (poolId, key.currency0, key.currency1, cfg.freezeProbe);
+        return (poolId, key.currency0, key.currency1);
     }
 
     /// @dev A position out of range earns nothing, so it is neither worth leasing nor worth buying.
@@ -312,11 +339,9 @@ contract LeaseVault {
         if (d.state != State.Listed) revert NotListed();
         if (block.timestamp > d.listingExpiry) revert ListingExpired();
         if (msg.sender == d.seller) revert SelfDeal();
-        // Admission is re-checked here, not only at listing: a listing stays open for days, and in
-        // that window the committee may revoke the pool or the position may drift out of range.
-        // Re-reading cannot harm an active deal, because an active deal never reaches this line.
-        if (registry.listingsPaused()) revert ListingsPaused();
-        if (!registry.poolConfig(d.poolId).allowed) revert PoolNotAllowed();
+        // Re-checked here, not only at listing: a listing stays open for days, and in that window
+        // the position can drift out of range and stop earning anything to lease. It cannot harm an
+        // active deal, because an active deal never reaches this line.
         _requireInRange(d.tokenId, d.poolId);
 
         usdg.safeTransferFrom(msg.sender, address(this), d.price);
@@ -325,13 +350,12 @@ contract LeaseVault {
         d.fundedAt = uint40(block.timestamp);
         d.state = State.Active;
 
-        // Sale proceeds to the seller, net of the prepaid rent and the flat fee.
-        balances[d.seller] += uint256(d.price) - d.rent - d.listingFee;
-        balances[d.feeRecipient] += d.listingFee;
+        // Sale proceeds to the seller, net of the prepaid rent. Nothing is taken in between.
+        balances[d.seller] += uint256(d.price) - d.rent;
         // The rent stays in the vault as escrow and streams to the financier.
 
         _checkpoint(d, dealId);
-        emit Funded(dealId, msg.sender, d.fundedAt, d.listingFee);
+        emit Funded(dealId, msg.sender, d.fundedAt);
     }
 
     /// @notice Lessee collects the swap fees earned by the position. Liquidity is never touched.
@@ -516,7 +540,7 @@ contract LeaseVault {
         }
     }
 
-    /// @dev Whether the pair is frozen, using the probe the registry recorded for this pool.
+    /// @dev Whether the pair is frozen, using the probe the seller named in the terms.
     ///      Probe 0 means the committee found no freeze signal worth reading on this pair.
     function _isFrozen(Deal storage d) private view returns (bool) {
         if (d.freezeProbe == 0) return false;

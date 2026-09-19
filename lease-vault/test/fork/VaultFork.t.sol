@@ -2,7 +2,6 @@
 pragma solidity ^0.8.26;
 
 import {MiniTest} from "../utils/MiniTest.sol";
-import {AssetRegistry} from "../../src/AssetRegistry.sol";
 import {LeaseVault} from "../../src/LeaseVault.sol";
 import {IERC20} from "../../src/interfaces/IERC20.sol";
 import {IPositionManager} from "../../src/interfaces/IPositionManager.sol";
@@ -25,14 +24,27 @@ contract VaultForkTest is MiniTest {
     uint128 constant RENT = 7_000_000; // 7 USDG over 7 days
     uint128 constant BUYBACK = 1_000_000_000;
     uint32 constant TERM = 7 days;
+    uint32 constant GRACE = 48 hours;
 
-    AssetRegistry registry;
     LeaseVault vault;
     address financier = makeAddr("financier");
     address seller;
     uint256 tokenId;
     PoolKey key;
     bool live;
+
+    function _terms() internal pure returns (LeaseVault.Terms memory) {
+        return LeaseVault.Terms({
+            price: PRICE,
+            rent: RENT,
+            buybackPrice: BUYBACK,
+            term: TERM,
+            grace: GRACE,
+            listingDuration: 1 days,
+            maxFrozenBps: 2_500,
+            freezeProbe: 1
+        });
+    }
 
     function setUp() public {
         live = block.chainid == 4663;
@@ -42,10 +54,7 @@ contract VaultForkTest is MiniTest {
         seller = POSM.ownerOf(tokenId);
         (key,) = POSM.getPoolAndPositionInfo(tokenId);
 
-        registry = new AssetRegistry(address(this), address(0xFEE), 5_000_000);
-        vault = new LeaseVault(USDG, POSM, STATE_VIEW, registry);
-        registry.setPool(PoolId.unwrap(key.toId()), true, 2, 1, 1, bytes32(0));
-        registry.setTerm(TERM, true);
+        vault = new LeaseVault(USDG, POSM, STATE_VIEW);
 
         // Fund both parties with real USDG taken from the PoolManager's balance (fork only).
         vm.startPrank(POOL_MANAGER);
@@ -69,7 +78,7 @@ contract VaultForkTest is MiniTest {
 
     function _listAndFund() internal returns (uint256 id) {
         vm.prank(seller);
-        id = vault.list(tokenId, PRICE, RENT, BUYBACK, TERM, 1 days);
+        id = vault.list(tokenId, _terms());
         vm.prank(financier);
         vault.fund(id);
     }
@@ -77,7 +86,7 @@ contract VaultForkTest is MiniTest {
     function test_fork_list_custodiesTheRealNft() public {
         if (!live) return;
         vm.prank(seller);
-        uint256 id = vault.list(tokenId, PRICE, RENT, BUYBACK, TERM, 1 days);
+        uint256 id = vault.list(tokenId, _terms());
         assertEq(POSM.ownerOf(tokenId), address(vault));
         LeaseVault.Deal memory d = vault.deal(id);
         assertEq(uint256(d.poolId), uint256(PoolId.unwrap(key.toId())));
@@ -122,7 +131,7 @@ contract VaultForkTest is MiniTest {
     function test_fork_release_givesTheFinancierAWorkingPosition() public {
         if (!live) return;
         uint256 id = _listAndFund();
-        vm.warp(block.timestamp + TERM + registry.grace());
+        vm.warp(block.timestamp + TERM + GRACE);
         vm.prank(financier);
         vault.release(id);
         vm.prank(financier);
