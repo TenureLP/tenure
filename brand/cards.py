@@ -602,6 +602,47 @@ CARD12 = page(
     .replace(".det { font-size:16px", ".det { font-size:16px"),
 )
 
+
+# ---------------------------------------------------------------------- 13, the token
+
+ABSENT = [
+    "owner()",
+    "mint(address,uint256)",
+    "pause()",
+    "unpause()",
+    "blacklist(address)",
+    "setFee(uint256)",
+    "upgradeTo(address)",
+    "transferOwnership(address)",
+    "renounceOwnership()",
+]
+
+CARD13 = page(
+    "THE TOKEN",
+    """
+<h1>Nine things this token <b>cannot do to you.</b></h1>
+<div class="sub">None of them exist in the contract, because it has no owner to call them. A test
+  loops over all nine and fails if any of them ever resolves.</div>
+<div class="grow">
+  <div class="absent">
+    """
+    + "".join('<div class="a mono"><span>&#10007;</span>%s</div>' % f for f in ABSENT)
+    + """
+  </div>
+</div>
+<div class="foot">It also entitles you to <b>nothing at all</b> today. No revenue reaches it, and
+  the protocol takes no fee to give it any. That is written down, not implied.</div>
+""",
+    """
+  /* Nine items, so three columns fill exactly three rows and none sits alone. */
+  .absent { display:grid; grid-template-columns:repeat(3,1fr); gap:12px }
+  .a { background:var(--panel); border:1px solid var(--line); border-radius:13px;
+       padding:20px 22px; font-size:20px; color:var(--muted);
+       display:flex; align-items:center; gap:16px }
+  .a span { color:#FF8B7B; font-family:Bahnschrift,sans-serif; font-size:21px; flex:none }
+""",
+)
+
 CARDS = [
     ("card-1-acts.html", CARD1),
     ("card-2-not-a-loan.html", CARD2),
@@ -615,6 +656,7 @@ CARDS = [
     ("card-10-proven.html", CARD10),
     ("card-11-refuses.html", CARD11),
     ("card-12-agent.html", CARD12),
+    ("card-13-token.html", CARD13),
 ]
 
 if __name__ == "__main__":
