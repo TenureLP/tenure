@@ -178,7 +178,8 @@ lease being over.
 
 ## 9. Roadmap
 
-1. Done. Build, 37 unit tests including a stateful fuzz over random action sequences.
+1. Done. Build, 34 unit tests including a stateful fuzz over random action sequences (39 with the
+   five below, which pass as no-ops off the chain).
 2. Done. 5 integration tests forked against live Robinhood Chain state and the real PositionManager:
    custody of the NFT, fee collection without touching liquidity, buyback, delivery to the financier
    of a position they can actually unwind, and the lessee being unable to withdraw liquidity during
