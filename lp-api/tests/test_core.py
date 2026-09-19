@@ -1,3 +1,7 @@
+import http.client
+import os
+import threading
+import time
 import unittest
 
 from lpval import abi, v4math
@@ -75,3 +79,74 @@ class AbiTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ServedDescriptionTest(unittest.TestCase):
+    """The OpenAPI document is handed to third parties as the integration contract, so the service
+    has to actually serve it, and serve it the way tooling asks for it."""
+
+    PORT = 8479
+    started = False
+
+    @classmethod
+    def setUpClass(cls):
+        from lpval import server
+
+        os.environ.setdefault("LPVAL_SNAP_DB", os.path.join(os.path.dirname(__file__), "_spec_test.sqlite"))
+        threading.Thread(
+            target=lambda: server.serve(host="127.0.0.1", port=cls.PORT), daemon=True
+        ).start()
+        for _ in range(60):
+            try:
+                cls._call("GET", "/health")
+                cls.started = True
+                return
+            except OSError:
+                time.sleep(0.1)
+
+    @classmethod
+    def tearDownClass(cls):
+        db = os.path.join(os.path.dirname(__file__), "_spec_test.sqlite")
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                os.remove(db + suffix)
+            except OSError:
+                pass
+
+    @classmethod
+    def _call(cls, method, path):
+        conn = http.client.HTTPConnection("127.0.0.1", cls.PORT, timeout=10)
+        try:
+            conn.request(method, path)
+            resp = conn.getresponse()
+            # resp.headers, not dict(getheaders()): the server sends header names in lower case and
+            # a plain dict would make the lookups case-sensitive against the wire spelling.
+            return resp.status, resp.headers, resp.read()
+        finally:
+            conn.close()
+
+    def setUp(self):
+        if not self.started:
+            self.skipTest("the server did not come up")
+
+    def test_the_spec_is_served_as_yaml(self):
+        status, headers, body = self._call("GET", "/openapi.yaml")
+        self.assertEqual(status, 200)
+        self.assertIn("yaml", headers.get("Content-Type", ""))
+        self.assertTrue(body.startswith(b"openapi: 3.1"), body[:40])
+
+    def test_the_spec_is_free(self):
+        """A client has to be able to read what it is being asked to pay for before paying."""
+        status, _, _ = self._call("GET", "/openapi.yaml")
+        self.assertNotEqual(status, 402)
+
+    def test_head_mirrors_get_without_a_body(self):
+        """Validators, link checkers and CDNs ask with HEAD first. The base class answers 501."""
+        for path in ("/health", "/openapi.yaml", "/nope"):
+            get_status, get_headers, get_body = self._call("GET", path)
+            head_status, head_headers, head_body = self._call("HEAD", path)
+            self.assertEqual(head_status, get_status, path)
+            self.assertEqual(head_headers.get("Content-Type"), get_headers.get("Content-Type"), path)
+            # Content-length still describes what a GET would have returned; that is what HEAD is for.
+            self.assertEqual(head_headers.get("Content-Length"), str(len(get_body)), path)
+            self.assertEqual(head_body, b"", path)

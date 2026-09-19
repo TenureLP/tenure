@@ -3,6 +3,7 @@
 Routes
   GET     /health
   GET     /openapi.yaml                     the machine-readable description of everything below
+  HEAD    any of the above                  the same headers, no body
   OPTIONS /v1/position/<tokenId>            CORS preflight, needed for the payment headers
   GET     /v1/position/<tokenId>            valuation        (paid when the paywall is enabled)
   GET     /v1/position/<tokenId>/quote      valuation + indicative sale-and-leaseback terms (paid)
@@ -146,7 +147,10 @@ def make_handler(rpc: Rpc, paywall: Paywall):
                 for k, v in (extra_headers or {}).items():
                     self.send_header(k, v)
                 self.end_headers()
-                self.wfile.write(raw)
+                # A HEAD carries every header a GET would, and no body. Content-length still
+                # describes what a GET would have returned, which is what HEAD is for.
+                if not getattr(self, "_head_only", False):
+                    self.wfile.write(raw)
             except (ConnectionError, BrokenPipeError):
                 pass  # the client went away mid-response; that is not a fault worth logging
 
@@ -164,6 +168,16 @@ def make_handler(rpc: Rpc, paywall: Paywall):
             self.send_header("access-control-max-age", "86400")
             self.send_header("content-length", "0")
             self.end_headers()
+
+        def do_HEAD(self):  # noqa: N802
+            # Without this the base class answers 501, and validators, link checkers and CDNs all
+            # ask with HEAD before they ask with GET. Same work, same headers, no body: anything
+            # cheaper would have to guess at the status it is reporting.
+            self._head_only = True
+            try:
+                self.do_GET()
+            finally:
+                self._head_only = False
 
         def do_GET(self):  # noqa: N802
             url = urlparse(self.path)
