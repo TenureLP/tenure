@@ -166,7 +166,7 @@ What the form asks for, and what was put in it:
 | One-line description | Prices any Uniswap v4 liquidity position on Robinhood Chain, and proposes sale-and-leaseback terms for it. |
 | OpenAPI schema | [`lp-api/openapi.json`](../lp-api/openapi.json), or download `/openapi.json` from the live service |
 | What it does | **Read data (GET)** only. Nothing here writes. |
-| Logo | `brand/logo-mark-512.png`, square, 127 KB against a 512 KB limit |
+| Logo | `brand/logo-avatar-1024.png`, square, 410 KB against a 512 KB limit |
 | Payment network | Robinhood Chain, `4663`, fixed |
 | Demo video | optional, and there is nothing worth showing yet |
 
