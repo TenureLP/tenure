@@ -156,7 +156,7 @@ charge would be the one they never agreed to. The public deployment runs free, w
 unset, which is exactly the shape that arrangement wants. Leave it that way while listed there, or
 list a separate instance.
 
-What the form asks for, and what to put:
+What the form asks for, and what was put in it:
 
 | Field | Value |
 |---|---|
@@ -181,6 +181,44 @@ friendlier unit to price in, since it is the unit every valuation is already den
 Publishing needs a wallet connection and a signature proving ownership of the endpoint. That is not
 something this repository can or should do for anybody: it is the operator's key and the operator's
 claim.
+
+## It is listed
+
+Published on 19 September 2026 and verified from outside:
+
+| | |
+|---|---|
+| Page | `olanas.xyz/services/tenure-position-valuation` |
+| Service id | `svc_29f06fc7293c7ae6de47fac8` |
+| Gateway | `https://olanas.xyz/x402/tenure-position-valuation` |
+| Status | `live`, price `0.003` USDG, `GET` only, chain `4663` |
+
+At the time of listing, `/api/services` reported one service in total. The gateway answers a proper
+x402 version 2 challenge: scheme `onchain-tx`, network `eip155:4663`, 0.003 USDG. Their facilitator
+reports `feeBps: 0`, which matches what the site claims.
+
+The two hashes inside the signed launch message were checked against the files that were uploaded.
+The logo hash is the SHA-256 of `brand/logo-avatar-1024.png`. The schema hash is the SHA-256 of
+`lp-api/openapi.json` **re-serialised compactly** — their form parses the document and stringifies it
+before hashing, which is why it does not match the file on disk. Nothing was substituted.
+
+They republish the document with the server list rewritten to their gateway, our local development
+server dropped, and an `x-olanas-payment` extension added. That is what a gateway should do.
+
+### One thing to report back
+
+The `servers` entry in the document they publish is `http://olanas.xyz/x402/...`, not `https`. That
+URL answers `308 Permanent Redirect` to the https one, so a browser is fine. Two kinds of client are
+not:
+
+- one that does not follow redirects, which is a reasonable posture for a client carrying payment
+  proofs, and is what the RPC client in this repository does;
+- one that follows the redirect but drops headers across it, which several HTTP libraries do by
+  default. That silently loses `PAYMENT-SIGNATURE`, and the caller sees a `402` they have already
+  paid for.
+
+Nothing here is broken by it today, because the gateway itself serves https correctly. It is the
+published description that points at the wrong scheme.
 
 ## What is true today, and what is not
 
