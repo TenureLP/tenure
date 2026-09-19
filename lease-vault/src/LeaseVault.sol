@@ -135,6 +135,7 @@ contract LeaseVault {
     error TermNotAllowed();
     error BadListingDuration();
     error BadEconomics();
+    error BuybackAboveSale();
     error PoolNotAllowed();
     error HasSubscriber();
     error LiquidityTooLow();
@@ -225,6 +226,12 @@ contract LeaseVault {
         // A lease with no rent, or a buyback promise worth nothing, is not the contract this vault
         // claims to settle. Both sides must give something.
         if (price == 0 || rent == 0 || buybackPrice == 0 || uint256(rent) + fee >= price) revert BadEconomics();
+        // The financier is paid for the use of the asset, never for the passage of time. Left free,
+        // a buyback above the sale price is a guaranteed spread on top of the rent, which is a
+        // financing cost wearing the clothes of a sale. Nothing stops financiers from funding only
+        // the listings that carry one, so the restraint has to be in the code: there is no owner
+        // here to police it later.
+        if (buybackPrice > price) revert BuybackAboveSale();
 
         dealId = ++dealCount;
         Deal storage d = _deals[dealId];

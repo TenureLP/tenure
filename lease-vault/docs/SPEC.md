@@ -63,9 +63,15 @@ The financier earns 9 USDG of rent if the lease runs its course, about 0.5% over
 at the buyback. If there is no buyback they keep a position worth whatever it is worth. The seller
 paid 2 USDG of fees and 9 USDG of rent for 1,815 USDG of cash, while collecting the week's swap fees.
 
-Enforced in code: rent plus fee must be below the price, and neither the rent nor the buyback price
-may be zero. The buyback price is otherwise free. The interface suggests a sale price near market
-value; the discount is negotiated, not imposed.
+Enforced in code: rent plus fee must be below the price, neither the rent nor the buyback price may
+be zero, and **the buyback price may not exceed the sale price**. The financier is paid for the use
+of the asset, never for the passage of time; a buyback above the sale price would be a guaranteed
+spread on top of the rent, which is a financing cost wearing the clothes of a sale. The seller sets
+that number, so nothing would stop financiers from funding only the listings that carry a spread —
+and there is no owner here to forbid it afterwards, so the code does it. Below the sale price is
+allowed: only the financier is worse off, and only by their own choice to fund it.
+
+The interface suggests a sale price near market value; the discount is negotiated, not imposed.
 
 ## 5. Rent, and freezes of the underlying
 
@@ -116,9 +122,11 @@ Open points for a committee to settle:
 
 1. Rent shown by the interface as a percentage of the price, even though the contract only knows an
    amount. AAOIFI allows rent to be indexed; presentation does not change the nature of the contract.
-2. A buyback at a fixed price equal to the sale price. Allowed by the 2008 AAOIFI statement for
+2. A buyback at a fixed price, capped at the sale price. Allowed by the 2008 AAOIFI statement for
    ijarah sukuk, criticised by some scholars. The alternative, a buyback at market value computed
-   from pool state, exposes the deal to price manipulation in shallow pools.
+   from pool state, exposes the deal to price manipulation in shallow pools. The cap removes the
+   worst reading of the fixed price, that it hides a return on capital, but not the objection to
+   fixing it at all.
 3. Refunding unaccrued rent on an early buyback. Consistent with a lease that ends when ownership
    transfers; some committees prefer the buyback price plus the remaining rent.
 4. Whether an LP position on a crypto pair counts as productive. Swap fees are payment for a market

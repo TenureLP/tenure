@@ -137,6 +137,22 @@ contract LeaseVaultTest is MiniTest {
         vault.list(tokenId, 9_000_000, RENT, BUYBACK, TERM, 1 days);
     }
 
+    /// The financier is paid for the use of the asset, not for the passage of time. A buyback above
+    /// the sale price is a guaranteed spread on top of the rent, which is a financing cost wearing
+    /// the clothes of a sale. There is no owner here to forbid it later, so the code does.
+    function test_list_rejectsBuybackAboveSale() public {
+        vm.prank(seller);
+        vm.expectRevert(LeaseVault.BuybackAboveSale.selector);
+        vault.list(tokenId, PRICE, RENT, PRICE + 1, TERM, 1 days);
+    }
+
+    function test_list_allowsBuybackBelowSale() public {
+        // Only the financier is worse off, and only by their own choice to fund it.
+        vm.prank(seller);
+        uint256 id = vault.list(tokenId, PRICE, RENT, PRICE - 1, TERM, 1 days);
+        assertEq(uint256(vault.deal(id).buybackPrice), uint256(PRICE - 1));
+    }
+
     function test_list_rejectsUnallowedTerm() public {
         vm.prank(seller);
         vm.expectRevert(LeaseVault.TermNotAllowed.selector);
