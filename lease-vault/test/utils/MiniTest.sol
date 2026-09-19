@@ -22,6 +22,8 @@ abstract contract MiniTest {
     error AssertEqAddress(address left, address right);
     error AssertGe(uint256 left, uint256 right);
     error AssertGt(uint256 left, uint256 right);
+    error AssertLe(uint256 left, uint256 right);
+    error AssertTrue(string reason);
 
     function makeAddr(string memory name) internal returns (address a) {
         a = address(uint160(uint256(keccak256(bytes(name)))));
@@ -42,5 +44,20 @@ abstract contract MiniTest {
 
     function assertGt(uint256 left, uint256 right) internal pure {
         if (left <= right) revert AssertGt(left, right);
+    }
+
+    function assertLe(uint256 left, uint256 right) internal pure {
+        if (left > right) revert AssertLe(left, right);
+    }
+
+    /// @param reason Carried into the revert, so a loop over cases says which one failed.
+    function assertTrue(bool condition, string memory reason) internal pure {
+        if (!condition) revert AssertTrue(reason);
+    }
+
+    /// @dev Folds a fuzzed word into a range without throwing away draws, which `vm.assume` does.
+    ///      Lived in Invariants.t.sol until a second suite needed it.
+    function _bound(uint256 x, uint256 lo, uint256 hi) internal pure returns (uint256) {
+        return hi <= lo ? lo : lo + (x % (hi - lo + 1));
     }
 }

@@ -59,7 +59,7 @@ Every payout is a balance the owed party withdraws. The vault has no owner and n
 
 | Folder | What it is | State |
 |---|---|---|
-| [`lease-vault/`](lease-vault) | The contracts. `LeaseVault` is immutable and has no owner, no pause and no dependency on any other contract. | 47 tests, 5 against live chain state |
+| [`lease-vault/`](lease-vault) | The contracts. `LeaseVault` is immutable and has no owner, no pause and no dependency on any other contract. | 60 tests, 5 against live chain state |
 | [`lp-api/`](lp-api) | Position valuation over JSON-RPC, exact integer maths, behind an HTTP 402 gate that speaks x402 v2. | 69 tests, deployed, reads mainnet |
 | [`landing/`](landing) | Static page and its signup endpoint. | deployed |
 | [`brand/`](brand) | Logo, banner, teaser, all generated from one script. | done |
@@ -74,7 +74,7 @@ standard library.
 ./check.sh
 ```
 
-That builds the contracts, runs 47 Solidity tests including a stateful fuzz over random action
+That builds the contracts, runs 60 Solidity tests including a stateful fuzz over random action
 sequences, the Python tests, and the signup endpoint. Add `--fork` for five integration tests against
 the real Uniswap v4 PositionManager on Robinhood Chain.
 
@@ -94,6 +94,7 @@ cd lp-api && ./run.sh position 2908278 --quote
 | [Contracts](lease-vault/README.md) | The blocker on tokenised stocks, the addresses, how to deploy |
 | [API](lp-api/README.md) | Routes, the payment handshake, the fee-rate snapshots |
 | [Paying for the API](docs/OLANAS.md) | The x402 handshake in full, and how it lines up with Olanas |
+| [The token](docs/TOKEN.md) | What it is, what it is not, and what would have to be built to give it a purpose |
 
 ## What holds, and what does not
 

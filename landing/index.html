@@ -121,7 +121,8 @@
     tbody td:last-child { color: var(--ink); background: rgba(245, 184, 75, .05); }
 
     /* status + faq */
-    .status { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    /* Two by two since the token card joined: a fourth item in a row of three sits alone. */
+    .status { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
     .tag { display: inline-block; justify-self: start; font: 600 12px/1 Barlow, sans-serif; letter-spacing: .16em; text-transform: uppercase; padding: 7px 10px; border-radius: 6px; }
     .tag.done { background: rgba(123, 224, 166, .12); color: var(--ok); }
     .tag.todo { background: rgba(244, 241, 234, .08); color: var(--muted); }
@@ -187,7 +188,7 @@
             </fieldset>
             <label class="hp" aria-hidden="true">Company <input type="text" name="company" tabindex="-1" autocomplete="off"></label>
             <p class="msg" role="status" aria-live="polite"></p>
-            <p class="note">One email when access opens. Nothing else, and no token to sell you.</p>
+            <p class="note">One email when access opens. Nothing else. There is a token contract, it has no utility and no revenue behind it, and we will never email you about it.</p>
           </form>
         </div>
 
@@ -318,7 +319,8 @@
         <div class="status">
           <article class="card"><span class="tag done">Done</span><h3>Contracts</h3><p>One immutable vault with no owner, no pause and no fee. 42 unit tests including a stateful fuzz, plus 5 integration tests run against live Uniswap v4 state on Robinhood Chain.</p></article>
           <article class="card"><span class="tag done">Done</span><h3>Valuation API</h3><p>Live. Prices any v4 position on the chain with exact integer math: amounts, uncollected fees, a fee rate measured over a full day, indicative deal terms.</p></article>
-          <article class="card"><span class="tag todo">Not yet</span><h3>Audit and mainnet</h3><p>Not audited. Not deployed. No token. The waitlist opens the testnet first, mainnet only after an independent audit is published.</p></article>
+          <article class="card"><span class="tag todo">Not yet</span><h3>Audit and mainnet</h3><p>Not audited. No contract deployed on any chain. The waitlist opens the testnet first, mainnet only after an independent audit is published.</p></article>
+          <article class="card"><span class="tag todo">Not yet</span><h3>The token</h3><p>A fixed-supply ERC-20 with no owner, no minter and no pause. <strong>It has no utility and no revenue behind it today</strong>, and the protocol takes no fee to give it any. What could change that is written down in the token document, along with what has not been built.</p></article>
         </div>
       </div>
     </section>

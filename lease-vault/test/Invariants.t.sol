@@ -88,9 +88,6 @@ contract InvariantsTest is MiniTest {
 
     // ------------------------------------------------------------------ the fuzz
 
-    function _bound(uint256 x, uint256 lo, uint256 hi) internal pure returns (uint256) {
-        return lo + (x % (hi - lo + 1));
-    }
 
     /// @param acts   a sequence of action selectors
     /// @param jumps  seconds to warp before each action
