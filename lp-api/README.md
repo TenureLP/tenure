@@ -92,10 +92,23 @@ python3 tests/paywall_live.py
 
 ## Fee rate and snapshots
 
-The public RPC only serves about ten minutes of history. Every valuation therefore records a
-snapshot of the range's fee growth in SQLite, and the rate is computed from the oldest snapshot
-inside the requested window. With no snapshot it falls back to the last eight minutes and is marked
-`lowConfidence`. To keep a watchlist warm:
+The rate is read over the window the caller asked for, from the best source available, and every
+answer says which one it used:
+
+| `source` | What it means |
+|---|---|
+| `snapshot` | Our own recorded fee growth, from `LPVAL_SNAP_DB` |
+| `rpc-archive` | The node served the state at the start of the full window |
+| `rpc-short-window` | The node prunes, so the rate covers about the last eight minutes |
+
+Point `LPVAL_RPC` at an archive node and a fee rate is worth quoting on the very first request,
+before any snapshot exists. Without one, the public node keeps roughly ten minutes of history and
+the result is marked `lowConfidence`; a quote carries the same flag as `feeRateLowConfidence`. The
+fallback only ever shrinks the window — answering over more history than was asked for would answer
+a different question, and callers price deals on the answer.
+
+Every valuation also records a snapshot, which is what keeps a watchlist warm without an archive
+node:
 
 ```bash
 ./run.sh snapshot 2908278 2908010 2908292
@@ -107,7 +120,7 @@ in an hourly cron.
 
 | Variable | Default |
 |---|---|
-| `LPVAL_RPC` | `https://rpc.mainnet.chain.robinhood.com` |
+| `LPVAL_RPC` | `https://rpc.mainnet.chain.robinhood.com` — an archive node here improves the fee rate |
 | `LPVAL_PAY_TO` | empty, paywall off |
 | `LPVAL_PRICE_WEI` | `1000000000000` |
 | `LPVAL_MIN_CONFIRMATIONS` | `3` |

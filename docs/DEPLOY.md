@@ -54,6 +54,13 @@ To charge for requests, add:
 
 Leave `LPVAL_PAY_TO` unset to run the API free, which is the sensible way to start.
 
+`LPVAL_RPC` is worth setting to an archive node. The fee rate behind every quote is then measured
+over the window the caller asked for, from the first request, instead of over the eight minutes of
+history a pruning node keeps. **It is a secret** when the provider puts an API key in the URL, as
+most do: it belongs in the service's variables and nowhere else. The client takes the endpoint back
+out of any error text before it reaches a caller, because a failed probe reports its reason on a
+public route.
+
 `PORT` is provided by the platform and the server binds every interface when it sees it. Locally it
 stays on loopback.
 

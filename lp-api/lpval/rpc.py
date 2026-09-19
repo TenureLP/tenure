@@ -43,6 +43,21 @@ class Rpc:
         self._opener = urllib.request.build_opener(_NoRedirect)
         self._local = threading.local()
 
+    def scrub(self, text: str) -> str:
+        """Takes the endpoint back out of a message before it can escape.
+
+        Error text reaches callers: a failed fee-rate probe reports its reason on a public route.
+        Most providers carry the API key in the URL, so a transport error that happens to quote
+        what it was fetching would publish the key. Nothing upstream promises not to.
+        """
+        out = text.replace(self.url, "the RPC endpoint")
+        secret = self.url.rstrip("/").rsplit("/", 1)[-1]
+        # The last path segment is the key for Alchemy, Infura and most of the others. Short tails
+        # like a bare hostname are not worth redacting and would mangle ordinary messages.
+        if len(secret) > 8:
+            out = out.replace(secret, "[redacted]")
+        return out
+
     def _next_id(self) -> int:
         """Ids must be unique within a payload; an unlocked increment can hand two threads the same
         one and collapse two results into one."""
@@ -84,7 +99,7 @@ class Rpc:
         try:
             return json.loads(body)
         except ValueError as exc:
-            raise UpstreamError(f"response was not JSON: {exc}") from exc
+            raise UpstreamError(self.scrub(f"response was not JSON: {exc}")) from exc
 
     def _post(self, payload):
         """Retries idempotent reads. Every JSON-RPC method this client sends is a read."""
@@ -99,7 +114,7 @@ class Rpc:
             except UpstreamError as exc:
                 last = exc
             except Exception as exc:  # timeout, DNS, reset, TLS
-                last = UpstreamError(str(exc))
+                last = UpstreamError(self.scrub(str(exc)))
             left = self._remaining()
             if left is not None and left <= 0:
                 raise UpstreamError("deadline exceeded")
@@ -115,7 +130,7 @@ class Rpc:
         if not isinstance(out, dict):
             raise UpstreamError("expected a single JSON-RPC response")
         if "error" in out:
-            raise RpcError(f"{method}: {out['error']}")
+            raise RpcError(self.scrub(f"{method}: {out['error']}"))
         return out.get("result")
 
     @staticmethod

@@ -226,6 +226,24 @@ class RpcTest(unittest.TestCase):
     def test_reverted_is_not_the_same_as_unreachable(self):
         self.assertIsNot(REVERTED, None)
 
+    def test_the_endpoint_never_escapes_in_an_error(self):
+        """The API key lives in the RPC url, and a failed fee-rate probe publishes its reason on a
+        public route. Nothing upstream promises not to quote the url it was fetching."""
+        # Shaped like a provider key, obviously not one, so no secret scanner ever has to decide.
+        key = "NOT-A-REAL-KEY-0000000000"
+        rpc = Rpc(f"https://node.example/v2/{key}")
+
+        leaky = f"<urlopen error for https://node.example/v2/{key}>"
+        self.assertNotIn(key, rpc.scrub(leaky))
+        self.assertNotIn(key, rpc.scrub(f"rate limited on key {key}"))
+        self.assertIn("the RPC endpoint", rpc.scrub(leaky))
+        # Ordinary text is left alone.
+        self.assertEqual(rpc.scrub("HTTP 429"), "HTTP 429")
+
+    def test_scrubbing_does_not_mangle_a_keyless_endpoint(self):
+        rpc = Rpc("https://rpc.mainnet.chain.robinhood.com")
+        self.assertEqual(rpc.scrub("HTTP 500 from the node"), "HTTP 500 from the node")
+
 
 class QuoteTest(unittest.TestCase):
     """The vault refuses a listing whose price or rent is zero. A quote that cannot produce both is
