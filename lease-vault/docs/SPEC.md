@@ -69,7 +69,7 @@ Limite connue : un gel non checkpointé n'est pas rétroactif. Un keeper doit ap
 | Vente réelle, transfert de propriété | Le NFT est enregistré au financeur dès `fund`, cessible via `transferFinancierPosition`, livré par `release` sans étape de « réclamation » | AAOIFI 9, 3/1 ; déclaration sukuk 2008 |
 | Le bailleur porte le risque de l'actif | Loyer suspendu pendant le gel, remboursement du non-couru ; aucune créance sur le locataire en cas de destruction | AAOIFI 9, 5/1/7 |
 | Loyer pour un usufruit réel | Le locataire encaisse les frais de swap via `collectFees` ; la position doit être dans le range au listing (`OutOfRange`) et avoir une liquidité minimale | AAOIFI 9, 5/1 |
-| Pas de 'inah | Vente et bail sont deux actes réglés dans l'ordre dans `fund` ; le vendeur ne peut pas être financeur (`SelfDeal`) ; le financeur ne peut pas céder au locataire hors `buyBack` | Académie du Fiqh OCI, rés. 66 ; AAOIFI 9, 3/2 |
+| Pas de 'inah | Vente et bail sont deux actes réglés dans l'ordre dans `fund` ; le financeur ne peut pas céder au locataire hors `buyBack`. La vérification `SelfDeal` compare des adresses : elle empêche l'auto-financement évident, pas un vendeur qui utiliserait une seconde adresse. Aucun contrat ne peut faire mieux on-chain, c'est au comité de l'apprécier | Académie du Fiqh OCI, rés. 66 ; AAOIFI 9, 3/2 |
 | Rachat par promesse unilatérale, prix fixé admis | `buyBack` au `buybackPrice`, exercice au seul choix du locataire | Déclaration AAOIFI 2008 sur les sukuk ijara, à condition que le bailleur porte la perte totale |
 | Pas de ghalaq ar-rahn | Il n'y a pas de gage : le financeur ne « garde » rien, il prend livraison de son bien | Hadith « la yaghlaq ar-rahn » |
 | Frais de service au coût, pas en pourcentage | `listingFee` en montant fixe, plafonné à la construction du registre, snapshoté dans le deal | AAOIFI 19 sur les frais de qard, par analogie |
@@ -96,6 +96,13 @@ Conséquences pour Lease Vault :
 **CFTC, lettre 26-25.** No-action pour les fournisseurs de logiciels passifs qui ne détiennent pas de fonds, n'exercent aucune discrétion, ne routent pas d'ordres et ne sont pas rémunérés en fonction du volume. Le vault et une interface qui l'affiche cochent ces cases, ce qui est un argument pour une interface neutre rémunérée par des frais fixes. Cette lettre concerne les registrations IB et AP côté dérivés, pas les titres.
 
 ## 8. Sécurité
+
+Une passe d'audit adversarial a eu lieu le 19 septembre 2026 ; ses conclusions et ce qui a été
+corrigé sont dans `../../docs/AUDIT.md`. Deux points en sont issus et méritent d'être lus ici :
+le gel n'est compté que six heures au-delà de la dernière observation, sinon un seul appel pendant
+un arrêt d'une seconde suffirait à stopper le loyer pour tout le terme ; et les frais gagnés
+pendant la période de grâce reviennent à celui qui prend livraison, le bail étant terminé.
+
 
 - Réentrance : verrou simple sur toutes les fonctions qui déplacent des actifs. Les transferts NFT utilisent `transferFrom`, sans hook de réception.
 - Registre : ses paramètres sont lus au listing et gelés dans le deal ; un changement ultérieur ne touche aucun deal actif. Le registre ne peut pas retirer d'actifs.
