@@ -38,9 +38,9 @@ window.Wallet = (function () {
   // the page is served from this machine and the url asks for it by name, and the header says so
   // in words, because a fake wallet that is not obviously fake is a way to lose real money.
 
-  function devProvider(rpcUrl) {
+  function devProvider(rpcUrl, startAt) {
     var accounts = [];
-    var current = 0;
+    var current = startAt || 0;
 
     return {
       isDev: true,
@@ -71,7 +71,7 @@ window.Wallet = (function () {
   function init(config) {
     cfg = config;
     if (cfg.devWallet) {
-      provider = devProvider(cfg.chain.rpc);
+      provider = devProvider(cfg.chain.rpc, cfg.devAccount);
       state.kind = "dev";
     } else if (window.ethereum) {
       provider = window.ethereum;
@@ -90,6 +90,23 @@ window.Wallet = (function () {
     if (!provider) throw new Error("No wallet was found in this browser.");
     var accounts = await provider.request({ method: "eth_requestAccounts" });
     state.account = accounts && accounts[0];
+    state.chainId = Number(await provider.request({ method: "eth_chainId" }));
+    emit();
+    return state.account;
+  }
+
+  /** Picks up an authorisation already given, without asking for one.
+
+      eth_accounts never prompts: it reports what the wallet has already agreed to. Without this,
+      somebody who reloads the page, or opens a link straight to a deal, is told to connect a
+      wallet that is already connected, and the screen behind that message is drawn empty.
+
+      @returns the account, or null when there is nothing to restore. */
+  async function restore() {
+    if (!provider) return null;
+    var accounts = await provider.request({ method: "eth_accounts" });
+    if (!accounts || !accounts.length) return null;
+    state.account = accounts[0];
     state.chainId = Number(await provider.request({ method: "eth_chainId" }));
     emit();
     return state.account;
@@ -158,7 +175,7 @@ window.Wallet = (function () {
   }
 
   return {
-    init: init, available: available, connect: connect, on: on,
+    init: init, available: available, connect: connect, restore: restore, on: on,
     onRightChain: onRightChain, switchChain: switchChain,
     send: send, wait: wait,
     state: state,

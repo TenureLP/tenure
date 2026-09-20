@@ -88,7 +88,7 @@ echo "  now held by $(cast call "$POSM" "ownerOf(uint256)(address)" "$TOKEN_ID" 
 # ---------------------------------------------------------------- the money
 
 say "funding the financier with USDG"
-AMOUNT=50000000000  # 50,000 USDG, six decimals
+AMOUNT=${USDG_AMOUNT:-250000000000}  # 250,000 USDG by default, six decimals
 POOL_MANAGER=$(cast call "$POSM" "poolManager()(address)" --rpc-url "$RPC")
 echo "  taking it from the pool manager at $POOL_MANAGER"
 cast rpc anvil_impersonateAccount "$POOL_MANAGER" --rpc-url "$RPC" >/dev/null

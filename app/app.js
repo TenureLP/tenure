@@ -26,6 +26,9 @@
     if (params.get("rpc")) CFG.chain.rpc = params.get("rpc");
     if (params.get("vault")) CFG.vault = params.get("vault");
     CFG.devWallet = params.get("wallet") === "dev";
+    // Which development account to act as. Two windows side by side, one the seller and one
+    // the financier, is how this flow is actually watched.
+    CFG.devAccount = Math.max(0, Math.floor(Number(params.get("as")) || 0));
   }
 
   var HAS_VAULT = /^0x[0-9a-fA-F]{40}$/.test(CFG.vault || "");
@@ -70,9 +73,22 @@
     return s + " s";
   }
 
-  /** "in 6 days" / "5 h ago", which is what somebody reading a deadline actually wants. */
+  /* Every deadline in the vault is compared against block.timestamp, so this page reads that
+     clock rather than the one in the corner of the screen. A machine whose clock is a day out
+     would otherwise be told a grace window is open that the chain considers closed. */
+  var chainNow = Math.floor(Date.now() / 1000);
+
+  async function readChainClock() {
+    try {
+      var block = await Eth.rpc(CFG.chain.rpc, "eth_getBlockByNumber", ["latest", false]);
+      if (block && block.timestamp) chainNow = Number(BigInt(block.timestamp));
+    } catch (e) { /* keep the last reading; a missed block is not worth an error on screen */ }
+    return chainNow;
+  }
+
+  /** "in 6 days" / "5 h ago", against the chain's clock. */
   function when(unixSeconds) {
-    var delta = Number(unixSeconds) - Math.floor(Date.now() / 1000);
+    var delta = Number(unixSeconds) - chainNow;
     return delta >= 0 ? "in " + duration(delta) : duration(delta) + " ago";
   }
 
@@ -97,6 +113,15 @@
     d.appendChild(el("div", "k", k));
     d.appendChild(el("div", "v", v));
     parent.appendChild(d);
+  }
+
+  /** A figure fit to print, or null. Beyond about a quadrillion USDG nothing is a quantity of
+      money any more, it is an overflowed counter, and toFixed answers those in scientific
+      notation, which reads like a bug in this page rather than a broken counter in the pool. */
+  function money(x, places) {
+    var n = Number(x);
+    if (!isFinite(n) || Math.abs(n) >= 1e15) return null;
+    return n.toFixed(places === undefined ? 2 : places);
   }
 
   /** The API writes reasons as fragments, lower case and unpunctuated. Pages are not logs. */
@@ -272,9 +297,9 @@
     row(rows, "Range", pos.tickLower + " → " + pos.tickUpper);
     row(rows, "Liquidity", pos.liquidity);
     if (value) {
-      row(rows, "Held", Number(value.principal).toFixed(2) + " USDG");
-      row(rows, "Uncollected fees", Number(value.fees).toFixed(2) + " USDG");
-      row(rows, "Market value", Number(value.total).toFixed(2) + " USDG", true);
+      row(rows, "Held", (money(value.principal) || "—") + " USDG");
+      row(rows, "Uncollected fees", (money(value.fees) || "—") + " USDG");
+      row(rows, "Market value", (money(value.total) || "—") + " USDG", true);
     } else if (d.valueNote) {
       row(rows, "Value", d.valueNote);
     }
@@ -284,17 +309,26 @@
     // ---- what it earns
     var p2 = el("div", "panel");
     p2.appendChild(el("h2", null, "What the range earns"));
-    if (rate.available) {
+    var perDay = rate.available ? money(rate.feesPerDayUSDG) : null;
+    if (rate.available && rate.plausible !== false && perDay !== null) {
       var r2 = el("div", "rows");
-      row(r2, "Fees per day", Number(rate.feesPerDayUSDG).toFixed(2) + " USDG", true);
-      row(r2, "Fee APR", rate.feeAprPercent ? rate.feeAprPercent.toFixed(2) + " %" : "—");
+      row(r2, "Fees per day", perDay + " USDG", true);
+      row(r2, "Fee APR", money(rate.feeAprPercent) ? money(rate.feeAprPercent) + " %" : "—");
       row(r2, "Measured over", duration(rate.windowSeconds) + " of chain history");
       row(r2, "Source", rate.source + (rate.lowConfidence ? " · low confidence" : ""));
       p2.appendChild(r2);
-      if (rate.plausible === false) {
-        p2.appendChild(el("p", "note", "The pool's fee counter has wrapped around, so these " +
-          "figures are not usable. No terms are proposed from them."));
-      }
+    } else if (rate.available) {
+      // The counter this is read from is a wrapping accumulator, and a pool that has gone round
+      // reports a rate no arithmetic can rescue. Printing it anyway would be the page inventing a
+      // number; the honest row is the absence of one.
+      var r3 = el("div", "rows");
+      row(r3, "Fees per day", "not readable");
+      row(r3, "Measured over", duration(rate.windowSeconds) + " of chain history");
+      p2.appendChild(r3);
+      var w = el("p", "note warn", "This pool's fee counter has wrapped around, so nothing can be " +
+        "read from it about what the range earns. No terms are proposed from a number like that.");
+      w.style.marginTop = "14px";
+      p2.appendChild(w);
     } else {
       p2.appendChild(el("p", "note", sentence(rate.reason || "No fee rate could be measured")));
     }
@@ -305,9 +339,9 @@
     p3.appendChild(el("h2", null, "Indicative terms"));
     if (quote.available) {
       var tiles = el("div", "tiles");
-      tile(tiles, "SALE PRICE", Number(quote.suggestedSalePriceUSDG).toFixed(2), "USDG", true);
-      tile(tiles, "BUYBACK", Number(quote.suggestedBuybackPriceUSDG).toFixed(2), "USDG", true);
-      tile(tiles, "RENT · " + quote.termDays + " DAYS", Number(quote.suggestedRentUSDG).toFixed(2), "USDG");
+      tile(tiles, "SALE PRICE", money(quote.suggestedSalePriceUSDG) || "—", "USDG", true);
+      tile(tiles, "BUYBACK", money(quote.suggestedBuybackPriceUSDG) || "—", "USDG", true);
+      tile(tiles, "RENT · " + quote.termDays + " DAYS", money(quote.suggestedRentUSDG) || "—", "USDG");
       p3.appendChild(tiles);
 
       var note = "The buyback equals the sale price. The contract refuses any listing where it is " +
@@ -363,11 +397,11 @@
       inputs[key] = i;
     }
 
-    field("price", "Sale price · USDG", Number(quote.suggestedSalePriceUSDG).toFixed(2),
+    field("price", "Sale price · USDG", money(quote.suggestedSalePriceUSDG) || "0",
           "What the financier pays you now.");
-    field("buyback", "Buyback · USDG", Number(quote.suggestedBuybackPriceUSDG).toFixed(2),
+    field("buyback", "Buyback · USDG", money(quote.suggestedBuybackPriceUSDG) || "0",
           "Never above the sale price.");
-    field("rent", "Rent for the term · USDG", Number(quote.suggestedRentUSDG).toFixed(2),
+    field("rent", "Rent for the term · USDG", money(quote.suggestedRentUSDG) || "0",
           "Prepaid out of your own proceeds.");
     field("termDays", "Term · days", String(quote.termDays || 7), "Between 1 and 30.");
     field("graceHours", "Grace · hours", "48", "Between 24 and 168.");
@@ -477,13 +511,15 @@
     out.appendChild(el("p", "note", "Reading the vault…"));
     var deals;
     try {
+      await readChainClock();
       deals = await allDeals();
     } catch (err) {
       out.textContent = "";
       return out.appendChild(el("p", "note", "The chain could not be read: " + (err.message || err)));
     }
-    var now = Math.floor(Date.now() / 1000);
-    var open = deals.filter(function (d) { return Number(d.state) === 1 && Number(d.listingExpiry) > now; });
+    var open = deals.filter(function (d) {
+      return Number(d.state) === 1 && Number(d.listingExpiry) > chainNow;
+    });
 
     out.textContent = "";
     if (!open.length) {
@@ -523,6 +559,7 @@
     out.appendChild(el("p", "note", "Reading the vault…"));
     var deals, owed, held;
     try {
+      await readChainClock();
       deals = await allDeals();
       owed = await vault("balances(address)", [me]);
       held = await usdgBalance(me);
@@ -594,7 +631,7 @@
     var me = Wallet.state.account;
     var isSeller = same(d.seller, me);
     var isFinancier = same(d.financier, me);
-    var now = Math.floor(Date.now() / 1000);
+    var now = chainNow;
 
     var card = el("div", "deal");
 
@@ -755,23 +792,19 @@
     }
   }
 
-  function initDevBanner() {
-    if (!CFG.devWallet) return;
+  function paintDevBanner() {
     $("dev").classList.remove("hidden");
     $("dev-vault").textContent = CFG.vault || "none";
     var sel = $("dev-account");
-    Wallet.connect().then(function () {
-      Wallet.provider().accounts().forEach(function (a, i) {
-        var o = el("option", null, (i === 0 ? "seller " : i === 1 ? "financier " : "account " + i + " ") + short(a));
-        o.value = String(i);
-        sel.appendChild(o);
-      });
-      sel.addEventListener("change", function () {
-        Wallet.provider().use(Number(sel.value));
-        refresh();
-      });
-    }).catch(function (err) {
-      say("The development chain did not answer: " + (err.message || err), "err");
+    Wallet.provider().accounts().forEach(function (a, i) {
+      var o = el("option", null, (i === 0 ? "seller " : i === 1 ? "financier " : "account " + i + " ") + short(a));
+      o.value = String(i);
+      if (i === CFG.devAccount) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener("change", function () {
+      Wallet.provider().use(Number(sel.value));
+      refresh();
     });
   }
 
@@ -789,8 +822,16 @@
 
   Wallet.init(CFG);
   Wallet.on(paintWallet);
-  initDevBanner();
   show(current());
+
+  // Then pick up an authorisation already given and draw the screen again, because the first
+  // draw happened before the wallet had answered.
+  Wallet.restore().then(function (account) {
+    if (CFG.devWallet) paintDevBanner();
+    if (account) refresh();
+  }, function (err) {
+    if (CFG.devWallet) say("The development chain did not answer: " + (err.message || err), "err");
+  });
 
   // A position id in the address bar makes a valuation shareable.
   var fromUrl = params.get("id");
