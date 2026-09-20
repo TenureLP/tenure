@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="brand/logo-mark-512.png" alt="" width="104">
+<img src="landing/assets/logo-mark-512.png" alt="" width="104">
 
 # Tenure
 
@@ -63,7 +63,6 @@ Every payout is a balance the owed party withdraws. The vault has no owner and n
 | [`lp-api/`](lp-api) | Position valuation over JSON-RPC, exact integer maths, behind an HTTP 402 gate that speaks x402 v2. | 69 tests, deployed, reads mainnet |
 | [`app/`](app) | The deal flow as a page. Values a position against the live API today. | reads only, no contract to write to |
 | [`landing/`](landing) | Static page and its signup endpoint. | deployed |
-| [`brand/`](brand) | Logo, banner, teaser, all generated from one script. | done |
 
 ## Run everything
 

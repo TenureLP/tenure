@@ -166,7 +166,7 @@ What the form asks for, and what was put in it:
 | One-line description | Prices any Uniswap v4 liquidity position on Robinhood Chain, and proposes sale-and-leaseback terms for it. |
 | OpenAPI schema | [`lp-api/openapi.json`](../lp-api/openapi.json), or download `/openapi.json` from the live service |
 | What it does | **Read data (GET)** only. Nothing here writes. |
-| Logo | `brand/logo-avatar-1024.png`, square, 410 KB against a 512 KB limit |
+| Logo | a square 1024 px mark, 410 KB against a 512 KB limit |
 | Payment network | Robinhood Chain, `4663`, fixed |
 | Demo video | optional, and there is nothing worth showing yet |
 
@@ -198,7 +198,8 @@ x402 version 2 challenge: scheme `onchain-tx`, network `eip155:4663`, 0.003 USDG
 reports `feeBps: 0`, which matches what the site claims.
 
 The two hashes inside the signed launch message were checked against the files that were uploaded.
-The logo hash is the SHA-256 of `brand/logo-avatar-1024.png`. The schema hash is the SHA-256 of
+The logo hash is the SHA-256 of the uploaded mark, which is no longer kept in this repository,
+so that one is on our word. The schema hash is the SHA-256 of
 `lp-api/openapi.json` **re-serialised compactly** — their form parses the document and stringifies it
 before hashing, which is why it does not match the file on disk. Nothing was substituted.
 

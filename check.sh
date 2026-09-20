@@ -21,7 +21,7 @@ step "Python: lp-api tests"
 
 step "Python: syntax of every module"
 python3 -m compileall -q lp-api/lpval landing/api landing/dev_server.py landing/server.py \
-  landing/read_waitlist.py brand/build.py >/dev/null; note $?
+  landing/read_waitlist.py >/dev/null; note $?
 
 step "API: the description matches the service, and both spellings match each other"
 # A description nobody checks drifts from the build within a week, and this one is handed to third
