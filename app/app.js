@@ -719,6 +719,11 @@
         button("Claim the rent so far", "ghost", function (b) {
           act(b, "claiming…", CFG.vault, Eth.calldata("claimRent(uint256)", [d.id]), refresh);
         });
+        // The financier owns the position outright, so they can sell that ownership on while the
+        // lease runs. Nothing about the lease changes: same rent, same buyback, same dates, a
+        // different counterparty. It is what makes a funded deal an asset rather than a lock-up,
+        // and it is the reason the vault never needed a way to cancel one.
+        button("Sell your side", "ghost", function () { openTransfer(card, d); });
         if (now >= Number(d.fundedAt) + Number(d.term) + Number(d.grace)) {
           button("Take delivery", "primary", function (b) {
             act(b, "releasing…", CFG.vault, Eth.calldata("release(uint256)", [d.id]), refresh);
@@ -732,6 +737,49 @@
       card.appendChild(el("p", "note", "This is your own listing, and the vault refuses to let you fund it."));
     }
     return card;
+  }
+
+  /** The financier hands their side of a live deal to somebody else.
+
+      The contract settles the rent accrued so far to the outgoing financier before changing the
+      name, so nobody has to remember to claim first. It refuses the zero address, the vault
+      itself and the lessee; the first two would strand the position and the third would put both
+      sides of the deal in one pair of hands. */
+  function openTransfer(card, d) {
+    if (card.querySelector(".transfer")) return;
+
+    var form = el("div", "transfer");
+    var input = el("input");
+    input.type = "text";
+    input.placeholder = "Address of the new financier";
+    input.spellcheck = false;
+    input.autocomplete = "off";
+
+    var go = el("button", "primary small", "Transfer");
+    var cancel = el("button", "ghost small", "Cancel");
+    var hint = el("span", "hint", "Rent accrued so far is settled to you first. The lease itself is " +
+      "untouched: the lessee keeps the same rent, the same buyback price and the same dates.");
+
+    form.appendChild(input);
+    form.appendChild(go);
+    form.appendChild(cancel);
+    form.appendChild(hint);
+    card.appendChild(form);
+    input.focus();
+
+    cancel.addEventListener("click", function () { card.removeChild(form); });
+
+    function submit() {
+      var to = input.value.trim();
+      if (!/^0x[0-9a-fA-F]{40}$/.test(to)) {
+        return say("That is not an address. It is forty hex characters after 0x.", "err");
+      }
+      act(go, "transferring…", CFG.vault,
+          Eth.calldata("transferFinancierPosition(uint256,address)", [d.id, to]), refresh);
+    }
+
+    go.addEventListener("click", submit);
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); });
   }
 
   // ------------------------------------------------------------------ routing
