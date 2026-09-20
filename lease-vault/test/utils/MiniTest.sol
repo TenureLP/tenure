@@ -24,6 +24,7 @@ abstract contract MiniTest {
     error AssertGt(uint256 left, uint256 right);
     error AssertLe(uint256 left, uint256 right);
     error AssertTrue(string reason);
+    error AssertEqString(string left, string right);
 
     function makeAddr(string memory name) internal returns (address a) {
         a = address(uint160(uint256(keccak256(bytes(name)))));
@@ -36,6 +37,12 @@ abstract contract MiniTest {
 
     function assertEq(address left, address right) internal pure {
         if (left != right) revert AssertEqAddress(left, right);
+    }
+
+    /// @dev Compared by hash because Solidity will not compare two strings directly, and the
+    ///      values that reach here are short labels rather than anything worth a byte loop.
+    function assertEq(string memory left, string memory right) internal pure {
+        if (keccak256(bytes(left)) != keccak256(bytes(right))) revert AssertEqString(left, right);
     }
 
     function assertGe(uint256 left, uint256 right) internal pure {

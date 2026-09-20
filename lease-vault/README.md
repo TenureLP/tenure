@@ -60,13 +60,15 @@ filling that field in cannot help itself. See section 6b of the specification.
 ```
 src/LeaseVault.sol          the core contract, no owner
 src/ScreeningList.sol       a published opinion about which pools are fit to deal in, read by nobody
+src/TestUSDG.sol            a settlement token for test networks, mintable by anyone
 src/interfaces/             minimal surfaces of PositionManager, StateView, ERC-20
 src/libraries/Types.sol     v4 types copied over, PositionInfo decoding, actions
 test/LeaseVault.t.sol       unit tests
 test/Invariants.t.sol       stateful fuzz over random action sequences
 test/fork/VaultFork.t.sol   integration tests forked against Robinhood Chain
 test/mocks/                 USDG, a pausable token, a PositionManager and a StateView
-script/Deploy.s.sol         deployment to Robinhood Chain
+script/Deploy.s.sol         the deployment itself
+deploy.sh                   one command, with the checks and the guards around it
 docs/SPEC.md                specification, compliance analysis, regulatory context
 ```
 
@@ -86,22 +88,42 @@ wide-range position on its own using `../lp-api`. Nothing is sent to the chain.
 ./fork-test.sh
 ```
 
-Before any deployment, confirm the hardcoded addresses are still what they claim:
+Before any deployment, confirm the addresses are still what they claim. A young chain redeploys
+its infrastructure, and the vault cannot tell an empty address from a silent one:
 
 ```bash
-./verify-addresses.sh
+./verify-addresses.sh            # mainnet, 4663
+./verify-addresses.sh testnet    # 46630
 ```
 
 Deployment. The vault takes no owner and no parameters of its own, so there is nothing to configure
 afterwards and nobody to ask:
 
 ```bash
-forge script script/Deploy.s.sol --rpc-url robinhood --broadcast --verify
+PRIVATE_KEY=0x... ./deploy.sh testnet
 ```
+
+The key is read from the environment and written nowhere: not to a file, not to the command line
+where `ps` would show it, and not to the broadcast log. The script verifies the addresses first,
+refuses a deployer holding no gas, and prints the line to paste into `app/config.js`, which is the
+whole of making the front end live on that chain.
+
+`./deploy.sh mainnet` additionally refuses unless `CONFIRM=no-audit-i-accept` is set. Nothing here
+has been audited, that is said everywhere else in this repository, and the one deployment that
+cannot be undone should not be reachable by habit.
 
 Add `SCREENING_OWNER=0x...` to deploy a `ScreeningList` beside it. That is a separate contract
 publishing one party's opinion of which pools are fit to deal in; the vault never reads it, and
 leaving it out changes nothing about how the vault behaves.
+
+### The settlement token off mainnet
+
+Robinhood Chain's testnet carries the same Uniswap v4 deployment at the same addresses as its
+mainnet, and has no USDG. So `USDG` is a variable rather than a constant: set it to a token that
+exists on the chain you are deploying to, or leave it unset and the deploy creates a `TestUSDG`,
+which has six decimals like the token it stands in for and which anyone can mint without limit.
+That last property is the point — a test token that could be scarce is a test token somebody will
+eventually try to sell. On mainnet an unset `USDG` means USDG, never an invented one.
 
 ## Addresses used on Robinhood Chain (4663)
 
