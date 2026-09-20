@@ -21,6 +21,7 @@ brand/card-[0-9]-*.html
 
 # Video rendering leftovers
 brand/video/frames/
+brand/video/frames-app/
 brand/video/stills/
 
 # Throwaway work from reviews and experiments
