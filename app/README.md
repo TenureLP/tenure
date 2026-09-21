@@ -36,11 +36,34 @@ and never deletes one, so the whole market is enumerable with no indexer and no 
 The actions offered are the ones the contract will accept from your address in that deal's state,
 and nothing else is drawn.
 
-## What is live
+## Chains
 
-`config.js` ships with an empty `vault`, because **no LeaseVault is deployed on any chain**. The
-page reads that emptiness and shows the valuation screen alone rather than controls that would
-revert. Filling that field in is the whole of going live.
+`config.js` holds one entry per chain, and the page works on whichever one is selected: from
+`?chain=`, from the connected wallet when its chain is configured, or the default. When more than
+one chain is configured a selector appears in the header.
+
+A chain becomes usable when it has **both** a `vault` and a settlement token. Either one missing
+and the page says so rather than drawing controls that would revert. `lease-vault/deploy.sh`
+prints the two lines to paste.
+
+| | 4663, mainnet | 46630, testnet |
+|---|---|---|
+| Uniswap v4 | canonical addresses | **the same addresses**, checked |
+| Settlement token | USDG | none, so the deploy creates a TestUSDG anyone can mint |
+| Valuation API | yes | **no** |
+| Vault | not deployed | not deployed |
+
+### Why the testnet has no valuation
+
+The API prices a position in USDG by reading USDG pools. The testnet has neither. So on a chain
+with no `api`, the opening screen stops offering to value anything and asks for terms instead: you
+paste a position id, it confirms from the chain who holds it, and you write the price, the buyback
+and the rent yourself.
+
+That is not a lesser mode. The vault is the thing that checks a listing, and every write is
+dry-run with `eth_call` first, so a refusal arrives named — `BuybackAboveSale`, `OutOfRange`,
+`NoLiquidity` — before any gas is spent. The form checks the same bounds client-side as a
+courtesy, never as the authority.
 
 ## Talking to the chain
 

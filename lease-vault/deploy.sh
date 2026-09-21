@@ -72,11 +72,14 @@ for name in ("TestUSDG", "LeaseVault", "ScreeningList"):
 vault = made.get("LeaseVault")
 if vault:
     print()
-    print("  Put this in app/config.js, and the front end is live on this chain:")
+    print("  Put these into app/config.js, under chains.%s, and the front end is live there:" % chain)
     print()
-    print('    vault: "%s"' % vault)
+    print('    vault: "%s",' % vault)
     if "TestUSDG" in made:
-        print('    usdg:  "%s"   // the test token, worthless by design' % made["TestUSDG"])
+        print('    usdg:  "%s",   // the test token, worthless by design' % made["TestUSDG"])
+    print()
+    print("  The page needs both: a chain with a vault and no settlement token cannot pay for")
+    print("  anything, so it stays in the state that draws no buttons.")
     print()
     print("  Check it answers before you tell anybody:")
     print("    cast call %s 'dealCount()(uint256)' --rpc-url <rpc>" % vault)

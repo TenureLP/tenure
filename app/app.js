@@ -15,24 +15,47 @@
 
   // ------------------------------------------------------------------ configuration
 
-  var CFG = JSON.parse(JSON.stringify(window.TENURE));
-
-  /* A development override, accepted only when this page is being served from the machine it is
-     running on. Anywhere else a link could otherwise point the app at somebody else's RPC and
-     somebody else's "vault", and the first thing that would do is ask for an approval. */
-  var isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
   var params = new URLSearchParams(location.search);
-  if (isLocal) {
-    if (params.get("rpc")) CFG.chain.rpc = params.get("rpc");
-    if (params.get("vault")) CFG.vault = params.get("vault");
-    CFG.devWallet = params.get("wallet") === "dev";
-    // Which development account to act as. Two windows side by side, one the seller and one
-    // the financier, is how this flow is actually watched.
-    CFG.devAccount = Math.max(0, Math.floor(Number(params.get("as")) || 0));
+  var isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+
+  var CFG, HAS_VAULT, DEC;
+
+  /* Flattens one chain's entry into the shape the rest of this file reads. Everything below asks
+     CFG for an address or an rpc and does not care which chain it came from, which is what keeps
+     chain selection to this one function. */
+  function useChain(id) {
+    var chain = window.TENURE.chains[String(id)];
+    if (!chain) return false;
+    CFG = JSON.parse(JSON.stringify(chain));
+    CFG.chain = { id: Number(id), name: chain.name, rpc: chain.rpc, explorer: chain.explorer };
+
+    /* A development override, accepted only when this page is being served from the machine it is
+       running on. Anywhere else a link could otherwise point the app at somebody else's RPC and
+       somebody else's "vault", and the first thing that would do is ask for an approval. */
+    if (isLocal) {
+      if (params.get("rpc")) CFG.chain.rpc = params.get("rpc");
+      if (params.get("vault")) CFG.vault = params.get("vault");
+      if (params.get("usdg")) CFG.usdg = params.get("usdg");
+      CFG.devWallet = params.get("wallet") === "dev";
+      // Which development account to act as. Two windows side by side, one the seller and one
+      // the financier, is how this flow is actually watched.
+      CFG.devAccount = Math.max(0, Math.floor(Number(params.get("as")) || 0));
+    }
+
+    HAS_VAULT = /^0x[0-9a-fA-F]{40}$/.test(CFG.vault || "")
+      && /^0x[0-9a-fA-F]{40}$/.test(CFG.usdg || "");
+    DEC = CFG.usdgDecimals;
+    return true;
   }
 
-  var HAS_VAULT = /^0x[0-9a-fA-F]{40}$/.test(CFG.vault || "");
-  var DEC = CFG.usdgDecimals;
+  function configuredChains() {
+    return Object.keys(window.TENURE.chains).map(Number);
+  }
+
+  // A chain named in the url wins; otherwise the default. A connected wallet can move it later,
+  // which is handled once the wallet has answered rather than guessed at here.
+  useChain(Number(params.get("chain")) || window.TENURE.defaultChain)
+    || useChain(window.TENURE.defaultChain);
 
   // ------------------------------------------------------------------ small helpers
 
@@ -64,6 +87,13 @@
   function same(a, b) { return !!a && !!b && a.toLowerCase() === b.toLowerCase(); }
 
   function usdg(units, places) { return Eth.fromUnits(units, DEC, places === undefined ? 2 : places); }
+
+  /** The settlement token's ticker on the active chain. It is USDG on mainnet and a worthless
+      stand-in on a test network, and a page that calls both USDG invites somebody to confuse
+      them. */
+  function tok() { return CFG.usdgSymbol; }
+
+  function money2(units) { return usdg(units) + " " + tok(); }
 
   function duration(seconds) {
     var s = Math.abs(Math.round(Number(seconds)));
@@ -224,7 +254,7 @@
     if (have >= amount) return true;
     var data = tokenData("approve(address,uint256)", ["address", "uint256"], [CFG.vault, amount]);
     var done = false;
-    await act(button, "approving " + usdg(amount) + " USDG…", CFG.usdg, data, function () { done = true; });
+    await act(button, "approving " + money2(amount) + "…", CFG.usdg, data, function () { done = true; });
     return done;
   }
 
@@ -244,6 +274,21 @@
     quiet();
     $("result").textContent = "";
 
+    // No valuation service on this chain: confirm the position exists and who holds it, then let
+    // the seller write their own terms. The vault checks the rest.
+    if (!CFG.api) {
+      try {
+        var owner = await positionOwner(id);
+        renderUnpriced(id, owner);
+      } catch (err) {
+        say("No position with that id on this chain.", "err");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Check it";
+      }
+      return;
+    }
+
     try {
       var res = await fetch(CFG.api + "/v1/position/" + id + "/quote");
       var data = await res.json();
@@ -262,6 +307,26 @@
       btn.disabled = false;
       btn.textContent = "Value it";
     }
+  }
+
+  /** What can be shown about a position without a service to price it. */
+  function renderUnpriced(tokenId, owner) {
+    var out = $("result");
+    out.textContent = "";
+
+    var p = el("div", "panel");
+    p.appendChild(el("h2", null, "Position " + tokenId));
+    var rows = el("div", "rows");
+    row(rows, "Held by", owner);
+    row(rows, "Settlement token", CFG.usdg ? tok() + " · " + CFG.usdg : "none configured");
+    p.appendChild(rows);
+    p.appendChild(el("p", "note", "There is no valuation service on " + CFG.chain.name + ": it " +
+      "prices positions in USDG by reading USDG pools, and this chain has none. What it holds and " +
+      "what it earns are still on the chain; the terms below are yours to write, and the vault " +
+      "refuses a listing it cannot settle."));
+    out.appendChild(p);
+
+    out.appendChild(listingPanel({ tokenId: tokenId, quote: null }));
   }
 
   function renderQuote(d) {
@@ -297,9 +362,9 @@
     row(rows, "Range", pos.tickLower + " → " + pos.tickUpper);
     row(rows, "Liquidity", pos.liquidity);
     if (value) {
-      row(rows, "Held", (money(value.principal) || "—") + " USDG");
-      row(rows, "Uncollected fees", (money(value.fees) || "—") + " USDG");
-      row(rows, "Market value", (money(value.total) || "—") + " USDG", true);
+      row(rows, "Held", (money(value.principal) || "—") + " " + tok());
+      row(rows, "Uncollected fees", (money(value.fees) || "—") + " " + tok());
+      row(rows, "Market value", (money(value.total) || "—") + " " + tok(), true);
     } else if (d.valueNote) {
       row(rows, "Value", d.valueNote);
     }
@@ -312,7 +377,7 @@
     var perDay = rate.available ? money(rate.feesPerDayUSDG) : null;
     if (rate.available && rate.plausible !== false && perDay !== null) {
       var r2 = el("div", "rows");
-      row(r2, "Fees per day", perDay + " USDG", true);
+      row(r2, "Fees per day", perDay + " " + tok(), true);
       row(r2, "Fee APR", money(rate.feeAprPercent) ? money(rate.feeAprPercent) + " %" : "—");
       row(r2, "Measured over", duration(rate.windowSeconds) + " of chain history");
       row(r2, "Source", rate.source + (rate.lowConfidence ? " · low confidence" : ""));
@@ -339,9 +404,9 @@
     p3.appendChild(el("h2", null, "Indicative terms"));
     if (quote.available) {
       var tiles = el("div", "tiles");
-      tile(tiles, "SALE PRICE", money(quote.suggestedSalePriceUSDG) || "—", "USDG", true);
-      tile(tiles, "BUYBACK", money(quote.suggestedBuybackPriceUSDG) || "—", "USDG", true);
-      tile(tiles, "RENT · " + quote.termDays + " DAYS", money(quote.suggestedRentUSDG) || "—", "USDG");
+      tile(tiles, "SALE PRICE", money(quote.suggestedSalePriceUSDG) || "—", tok(), true);
+      tile(tiles, "BUYBACK", money(quote.suggestedBuybackPriceUSDG) || "—", tok(), true);
+      tile(tiles, "RENT · " + quote.termDays + " DAYS", money(quote.suggestedRentUSDG) || "—", tok());
       p3.appendChild(tiles);
 
       var note = "The buyback equals the sale price. The contract refuses any listing where it is " +
@@ -367,12 +432,17 @@
     p.appendChild(el("h2", null, "Offer it"));
 
     if (!HAS_VAULT) {
-      p.appendChild(el("p", "note", "Listing needs the vault, and no contract is deployed on any " +
-        "chain yet. When one is, this is where the terms above become an offer somebody can fund."));
+      p.appendChild(el("p", "note", "Listing needs the vault, and none is deployed on " +
+        CFG.chain.name + " yet. When one is, this is where the terms above become an offer " +
+        "somebody can fund."));
       return p;
     }
     var quote = d.quote || {};
-    if (!quote.available) {
+    // A chain with no valuation service still has a vault. There, the terms are the seller's to
+    // write, and the vault is the thing that checks them: every listing is dry-run with eth_call
+    // first, so a refusal arrives named before any gas is spent.
+    var priced = quote.available === true;
+    if (!priced && CFG.api) {
       p.appendChild(el("p", "note", "No terms could be derived for this position, so there is " +
         "nothing to offer. The vault would refuse the listing."));
       return p;
@@ -397,11 +467,11 @@
       inputs[key] = i;
     }
 
-    field("price", "Sale price · USDG", money(quote.suggestedSalePriceUSDG) || "0",
+    field("price", "Sale price · " + tok(), priced ? money(quote.suggestedSalePriceUSDG) : "",
           "What the financier pays you now.");
-    field("buyback", "Buyback · USDG", money(quote.suggestedBuybackPriceUSDG) || "0",
+    field("buyback", "Buyback · " + tok(), priced ? money(quote.suggestedBuybackPriceUSDG) : "",
           "Never above the sale price.");
-    field("rent", "Rent for the term · USDG", money(quote.suggestedRentUSDG) || "0",
+    field("rent", "Rent for the term · " + tok(), priced ? money(quote.suggestedRentUSDG) : "",
           "Prepaid out of your own proceeds.");
     field("termDays", "Term · days", String(quote.termDays || 7), "Between 1 and 30.");
     field("graceHours", "Grace · hours", "48", "Between 24 and 168.");
@@ -415,7 +485,7 @@
     form = form2;
     field("builder", "Builder · address", "0x0000000000000000000000000000000000000000",
           "Whoever brought you this deal, paid out of your proceeds.");
-    field("builderFee", "Builder fee · USDG", "0", "At most a hundredth of the sale price.");
+    field("builderFee", "Builder fee · " + tok(), "0", "At most a hundredth of the sale price.");
     field("maxFrozenBps", "Frozen time credited · bps", "5000",
           "Ceiling on how much of the term can stop the rent. At most 5000.");
     field("freezeProbe", "Freeze probe", "0", "0 never asks the pair whether it is frozen, 1 calls paused().");
@@ -433,18 +503,30 @@
 
     /** The contract is the authority on every one of these bounds. Checking them here only means
         somebody learns they got it wrong before they pay for a block, not instead of. */
+    /** Reads one amount field and complains about that field rather than about parsing. On a chain
+        with no valuation service these start empty, so this is the ordinary path, not the edge. */
+    function amount(key, label) {
+      var raw = inputs[key].value.trim();
+      if (!raw) throw new Error("Fill in the " + label.toLowerCase() + ".");
+      try {
+        return Eth.toUnits(raw, DEC);
+      } catch (err) {
+        throw new Error("The " + label.toLowerCase() + " is not a number: " + raw);
+      }
+    }
+
     function read() {
       var t = {
-        price: Eth.toUnits(inputs.price.value.trim(), DEC),
-        rent: Eth.toUnits(inputs.rent.value.trim(), DEC),
-        buybackPrice: Eth.toUnits(inputs.buyback.value.trim(), DEC),
+        price: amount("price", "sale price"),
+        rent: amount("rent", "rent"),
+        buybackPrice: amount("buyback", "buyback"),
         term: BigInt(Math.round(Number(inputs.termDays.value) * 86400)),
         grace: BigInt(Math.round(Number(inputs.graceHours.value) * 3600)),
         listingDuration: BigInt(Math.round(Number(inputs.listingDays.value) * 86400)),
         maxFrozenBps: BigInt(inputs.maxFrozenBps.value.trim()),
         freezeProbe: BigInt(inputs.freezeProbe.value.trim()),
         builder: inputs.builder.value.trim(),
-        builderFee: Eth.toUnits(inputs.builderFee.value.trim(), DEC)
+        builderFee: amount("builderFee", "builder fee")
       };
       var bad = null;
       if (t.price === 0n || t.rent === 0n || t.buybackPrice === 0n) bad = "A price, a rent and a buyback must all be above zero.";
@@ -534,8 +616,8 @@
 
   function noVault() {
     var p = el("div", "panel");
-    p.appendChild(el("p", "note", "No LeaseVault is deployed on any chain, so there is no market to " +
-      "read. The valuation screen works without one."));
+    p.appendChild(el("p", "note", "No LeaseVault is deployed on " + CFG.chain.name + ", so there " +
+      "is no market to read here. Try another chain, or the screen that needs no contract."));
     return p;
   }
 
@@ -574,14 +656,14 @@
     var top = el("div", "panel");
     top.appendChild(el("h2", null, "Held for you"));
     var rows = el("div", "rows");
-    row(rows, "Withdrawable from the vault", usdg(owed) + " USDG", owed > 0n);
-    row(rows, "In your wallet", usdg(held) + " USDG");
+    row(rows, "Withdrawable from the vault", money2(owed), owed > 0n);
+    row(rows, "In your wallet", money2(held));
     top.appendChild(rows);
     if (owed > 0n) {
       var bar = el("div", "bar");
       bar.style.marginTop = "16px";
       bar.style.marginBottom = "0";
-      var w = el("button", "primary", "Withdraw " + usdg(owed) + " USDG");
+      var w = el("button", "primary", "Withdraw " + money2(owed));
       w.addEventListener("click", function () {
         act(w, "withdrawing…", CFG.vault, Eth.calldata("withdrawUSDG()", []), renderYou);
       });
@@ -647,9 +729,9 @@
     card.appendChild(head);
 
     var terms = el("div", "terms");
-    term(terms, "SALE PRICE", usdg(d.price) + " USDG");
-    term(terms, "BUYBACK", usdg(d.buybackPrice) + " USDG");
-    term(terms, "RENT · " + duration(d.term), usdg(d.rent) + " USDG");
+    term(terms, "SALE PRICE", money2(d.price));
+    term(terms, "BUYBACK", money2(d.buybackPrice));
+    term(terms, "RENT · " + duration(d.term), money2(d.rent));
     if (st === 1) term(terms, "OFFER CLOSES", when(d.listingExpiry));
     else if (st === 2) term(terms, "LEASE ENDS", when(Number(d.fundedAt) + Number(d.term)));
     else term(terms, "GRACE", duration(d.grace));
@@ -658,7 +740,7 @@
     if (st === 2) {
       var rows = el("div", "rows");
       row(rows, "Buy-back window closes", when(Number(d.fundedAt) + Number(d.term) + Number(d.grace)));
-      row(rows, "Rent already credited", usdg(d.rentClaimed) + " of " + usdg(d.rent) + " USDG");
+      row(rows, "Rent already credited", usdg(d.rentClaimed) + " of " + money2(d.rent));
       if (Number(d.pausedTotal) > 0 || Number(d.pausedSince) > 0) {
         row(rows, "Frozen time recorded", duration(d.pausedTotal));
       }
@@ -679,13 +761,13 @@
     // ---- listed
     if (st === 1) {
       if (!isSeller) {
-        button("Fund it · " + usdg(d.price) + " USDG", "primary", async function (b) {
+        button("Fund it · " + money2(d.price), "primary", async function (b) {
           if (!Wallet.state.account) {
             try { await Wallet.connect(); } catch (err) { return say(Eth.explain(err) || "", "err"); }
           }
           var have = await usdgBalance(Wallet.state.account);
           if (have < d.price) {
-            return say("Funding this needs " + usdg(d.price) + " USDG and you hold " + usdg(have) + ".", "err");
+            return say("Funding this needs " + money2(d.price) + " and you hold " + usdg(have) + ".", "err");
           }
           if (!(await ensureUsdgAllowance(b, d.price))) return;
           await act(b, "funding…", CFG.vault, Eth.calldata("fund(uint256)", [d.id]), refresh);
@@ -706,10 +788,10 @@
             act(b, "collecting…", CFG.vault, Eth.calldata("collectFees(uint256)", [d.id]), refresh);
           });
         }
-        button("Buy it back · " + usdg(d.buybackPrice) + " USDG", "primary", async function (b) {
+        button("Buy it back · " + money2(d.buybackPrice), "primary", async function (b) {
           var have = await usdgBalance(Wallet.state.account);
           if (have < d.buybackPrice) {
-            return say("Buying it back needs " + usdg(d.buybackPrice) + " USDG and you hold " + usdg(have) + ".", "err");
+            return say("Buying it back needs " + money2(d.buybackPrice) + " and you hold " + usdg(have) + ".", "err");
           }
           if (!(await ensureUsdgAllowance(b, d.buybackPrice))) return;
           await act(b, "buying back…", CFG.vault, Eth.calldata("buyBack(uint256)", [d.id]), refresh);
@@ -824,6 +906,12 @@
 
   function paintWallet(s) {
     var net = $("net"), connect = $("connect");
+    // A wallet sitting on a chain this page is configured for is not a mismatch, it is a choice.
+    // Follow it rather than telling somebody their own network is wrong.
+    if (s.account && s.chainId && s.chainId !== CFG.chain.id && window.TENURE.chains[String(s.chainId)]
+        && !params.get("chain")) {
+      return switchTo(s.chainId);
+    }
     if (!s.account) {
       net.textContent = "not connected";
       net.className = "net";
@@ -856,6 +944,38 @@
     });
   }
 
+  /** Changing chain rebuilds the configuration and redraws; the url carries it so the page can
+      be reloaded or shared on the chain it was read on. */
+  function switchTo(id) {
+    if (!useChain(id)) return;
+    // The wallet layer holds its own copy of the configuration, so it has to be told too.
+    Wallet.init(CFG);
+    params.set("chain", String(id));
+    history.replaceState(null, "", "?" + params.toString() + (location.hash || ""));
+    paintChrome();
+    $("result").textContent = "";
+    show(current());
+  }
+
+  function paintChrome() {
+    var ids = configuredChains();
+    var sel = $("chain");
+    sel.classList.toggle("hidden", ids.length < 2);
+    sel.textContent = "";
+    ids.forEach(function (id) {
+      var o = el("option", null, window.TENURE.chains[String(id)].name);
+      o.value = String(id);
+      if (id === CFG.chain.id) o.selected = true;
+      sel.appendChild(o);
+    });
+    $("foot").textContent = HAS_VAULT
+      ? "Vault " + CFG.vault + " on " + CFG.chain.name + ". "
+      : "No contract is deployed on " + CFG.chain.name + " yet, so nothing here can be listed or funded. ";
+    paintValueScreen();
+    paintWallet(Wallet.state);
+  }
+
+  $("chain").addEventListener("change", function () { switchTo(Number(this.value)); });
   $("connect").addEventListener("click", doConnect);
   $("lookup").addEventListener("click", lookup);
   $("tokenId").addEventListener("keydown", function (e) { if (e.key === "Enter") lookup(); });
@@ -864,12 +984,24 @@
   });
   window.addEventListener("hashchange", function () { show(current()); });
 
-  $("foot").textContent = HAS_VAULT
-    ? "Vault " + CFG.vault + " on " + CFG.chain.name + ". "
-    : "No contract is deployed yet, so nothing on this page can be listed or funded. ";
+  /** The opening screen is a valuation where there is a service to do it, and an offer where
+      there is not. Saying which avoids a button called "Value it" that values nothing. */
+  function paintValueScreen() {
+    var section = document.querySelector('[data-view="value"]');
+    section.querySelector("h1").textContent = CFG.api ? "Value a position." : "Offer a position.";
+    section.querySelector(".lede").textContent = CFG.api
+      ? "Paste the id of a Uniswap v4 position and see what it holds, what its range has actually " +
+        "earned, and the terms it could be offered on. Nothing is signed here."
+      : "Paste the id of a Uniswap v4 position you hold on " + CFG.chain.name + " and write the " +
+        "terms you would offer it on. There is no valuation service on this chain, so the figures " +
+        "are yours; the vault refuses anything it cannot settle.";
+    $("lookup").textContent = CFG.api ? "Value it" : "Check it";
+    document.querySelector('[data-go="value"]').textContent = CFG.api ? "Value" : "Offer";
+  }
 
   Wallet.init(CFG);
   Wallet.on(paintWallet);
+  paintChrome();
   show(current());
 
   // Then pick up an authorisation already given and draw the screen again, because the first

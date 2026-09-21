@@ -67,6 +67,12 @@
   }
   .net.on { color: var(--ok); border-color: rgba(123,224,166,.35); }
   .net.off { color: var(--bad); border-color: rgba(255,139,123,.35); }
+  .chain {
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line-hi);
+    border-radius: 999px; padding: 6px 12px; font-family: var(--ui); font-size: 13px;
+    font-weight: 600; cursor: pointer;
+  }
+  .chain:hover { border-color: var(--amber); }
 
   /* ---------------------------------------------------------------- type */
   h1 { font-size: 34px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 10px; text-wrap: balance; }
@@ -192,6 +198,7 @@
       <button class="tab" type="button" data-go="you">You</button>
     </div>
     <span class="spacer"></span>
+    <select class="chain hidden" id="chain" aria-label="Chain"></select>
     <span class="net" id="net">not connected</span>
     <button class="ghost small" id="connect" type="button">Connect wallet</button>
   </nav>
