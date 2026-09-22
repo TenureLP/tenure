@@ -39,6 +39,7 @@
       if (params.get("rpc")) CFG.chain.rpc = params.get("rpc");
       if (params.get("vault")) CFG.vault = params.get("vault");
       if (params.get("usdg")) CFG.usdg = params.get("usdg");
+      if (params.get("api")) CFG.api = params.get("api");
       CFG.devWallet = params.get("wallet") === "dev";
       // Which development account to act as. Two windows side by side, one the seller and one
       // the financier, is how this flow is actually watched.
@@ -1068,9 +1069,202 @@
     input.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); });
   }
 
+
+  // ------------------------------------------------------------------ positions
+
+  /** A wallet's positions, from the valuation service. It reads the chain's transfer history to
+      find them, so the first answer for a wallet takes a few seconds; the service keeps it warm. */
+  var pfFilter = "all";
+
+  function pfOwner() {
+    var typed = $("pf-owner").value.trim();
+    if (/^0x[0-9a-fA-F]{40}$/.test(typed)) return typed.toLowerCase();
+    if (isLocal && /^0x[0-9a-fA-F]{40}$/.test(params.get("owner") || "")) return params.get("owner").toLowerCase();
+    return Wallet.state.account ? Wallet.state.account.toLowerCase() : null;
+  }
+
+  function rangeBar(p) {
+    var tl = p.position.tickLower, tu = p.position.tickUpper;
+    var tick = p.price.tick;
+    var span = tu - tl, lo = tl - span * 0.35, hi = tu + span * 0.35;
+    if (tick < lo) lo = tick - span * 0.1;
+    if (tick > hi) hi = tick + span * 0.1;
+    var pct = function (t) { return Math.max(0, Math.min(100, (t - lo) / (hi - lo) * 100)); };
+    var wrap = el("div");
+    var bar = el("div", "rangebar");
+    var inside = el("div", "in");
+    inside.style.left = pct(tl) + "%";
+    inside.style.width = (pct(tu) - pct(tl)) + "%";
+    var at = el("div", "at");
+    at.style.left = pct(tick) + "%";
+    at.title = "current price";
+    bar.appendChild(inside);
+    bar.appendChild(at);
+    wrap.appendChild(bar);
+    var lab = el("div", "rangelab");
+    lab.appendChild(el("span", null, "range " + tl + " → " + tu));
+    lab.appendChild(el("span", null, "price at tick " + tick));
+    wrap.appendChild(lab);
+    return wrap;
+  }
+
+  function pfCard(p) {
+    var worst = (p.findings || []).reduce(function (w, f) {
+      var rank = { bad: 3, warn: 2, ok: 1, info: 0 };
+      return rank[f.level] > rank[w] ? f.level : w;
+    }, "info");
+    var card = el("div", "pf" + (worst === "bad" || worst === "warn" ? " " + worst : ""));
+    var head = el("div", "head");
+    head.appendChild(el("span", "pair", p.pool.pair));
+    head.appendChild(el("span", "id", "#" + p.tokenId));
+    var liq = BigInt(p.position.liquidity || "0");
+    head.appendChild(el("span", "pill " + (liq === 0n ? "wait" : p.position.inRange ? "ok" : "no"),
+      liq === 0n ? "empty" : p.position.inRange ? "in range" : "out of range"));
+    if (p.pool.hooks && p.pool.hooks.address) {
+      var hk = el("span", "pill wait", "hook");
+      hk.title = p.pool.hooks.permissions.join(", ") || "no permissions";
+      head.appendChild(hk);
+    }
+    card.appendChild(head);
+
+    var v = p.valueUSDG || {};
+    var figs = el("div", "figs");
+    term(figs, "Value", v.total != null ? fmt(v.total) + " USDG" : "—");
+    term(figs, "Fees waiting", v.fees != null ? fmt(v.fees) + " USDG" : "—");
+    term(figs, "Earned / day", p.earning.feesPerDayUSDG != null ? fmt(p.earning.feesPerDayUSDG) + " USDG" : "—");
+    term(figs, "APR, last day", p.earning.feeAprPercent != null ? fmt(p.earning.feeAprPercent) + " %" : "—");
+    card.appendChild(figs);
+    if (liq !== 0n) card.appendChild(rangeBar(p));
+
+    if ((p.findings || []).length) {
+      var list = el("ul", "findings");
+      p.findings.forEach(function (f) {
+        var li = el("li", f.level);
+        var body = el("div");
+        body.appendChild(el("b", null, f.title));
+        body.appendChild(el("span", null, f.detail));
+        li.appendChild(body);
+        list.appendChild(li);
+      });
+      card.appendChild(list);
+    }
+
+    var bar = el("div", "bar");
+    var val = el("button", "ghost small", "Value it");
+    val.addEventListener("click", function () {
+      location.hash = "#value";
+      $("tokenId").value = String(p.tokenId);
+      lookup();
+    });
+    bar.appendChild(val);
+    if (p.lease && p.lease.available && HAS_VAULT) {
+      var list2 = el("button", "primary small", "Offer it on Tenure");
+      list2.addEventListener("click", function () {
+        location.hash = "#value";
+        $("tokenId").value = String(p.tokenId);
+        lookup();
+      });
+      bar.appendChild(list2);
+    }
+    if (CFG.chain.explorer) {
+      var ex = el("a", "ghost small btnlink", "On the explorer");
+      ex.href = CFG.chain.explorer.replace(/\/$/, "") + "/token/" + CFG.posm + "/instance/" + p.tokenId;
+      ex.target = "_blank";
+      ex.rel = "noopener";
+      bar.appendChild(ex);
+    }
+    card.appendChild(bar);
+    return card;
+  }
+
+  async function renderPositions() {
+    var out = $("positions");
+    out.textContent = "";
+    if (!CFG.api) {
+      var na = el("div", "panel");
+      na.appendChild(el("p", "note", "The wallet view is read by the valuation service, which runs on Robinhood Chain mainnet. "
+        + "There are no USDG pools on " + CFG.chain.name + " to value positions against."));
+      return out.appendChild(na);
+    }
+    var owner = pfOwner();
+    if (!owner) {
+      var p = el("div", "panel empty");
+      p.appendChild(el("p", "note", "Connect a wallet to see its positions, or paste any address above: this screen only reads."));
+      var b = el("button", "primary small", "Connect wallet");
+      b.addEventListener("click", doConnect);
+      p.appendChild(b);
+      return out.appendChild(p);
+    }
+    out.appendChild(loading("Finding the positions of " + short(owner) + ". The first look at a wallet reads its whole history and can take a few seconds"));
+    var body;
+    try {
+      var res = await fetch(CFG.api + "/v1/owner/" + owner + "/positions");
+      if (res.status === 402) throw new Error("The valuation service asks for payment on this route right now.");
+      if (!res.ok) throw new Error("The valuation service could not read the chain right now. Try again in a moment.");
+      body = await res.json();
+    } catch (e) {
+      out.textContent = "";
+      var er = el("div", "panel");
+      er.appendChild(el("p", "note", e.message || "The valuation service did not answer."));
+      return out.appendChild(er);
+    }
+    if (pfOwner() !== owner) return; // the wallet changed while this was in flight
+    out.textContent = "";
+
+    var s = body.summary;
+    var tiles = el("div", "tiles four");
+    tile(tiles, "POSITIONS", String(s.positions), s.inRange + " in range" + (s.outOfRange ? ", " + s.outOfRange + " out" : ""));
+    tile(tiles, "VALUE", fmt(s.valueUSDG), "USDG", true);
+    tile(tiles, "FEES WAITING", fmt(s.uncollectedFeesUSDG), "USDG");
+    tile(tiles, "EARNED / DAY", s.feesPerDayUSDG != null ? fmt(s.feesPerDayUSDG) : "—", "USDG, last day");
+    out.appendChild(tiles);
+    if (!s.complete || (body.truncated || []).length || (body.unreadable || []).length) {
+      var notes = [];
+      if (!s.complete) notes.push("This wallet has received more positions than can be listed at once; these are its most recent.");
+      if ((body.truncated || []).length) notes.push(body.truncated.length + " more are held and not valued here.");
+      if ((body.unreadable || []).length) notes.push(body.unreadable.length + " could not be read just now.");
+      out.appendChild(el("p", "note", notes.join(" ")));
+    }
+    if (!(body.positions || []).length) {
+      var none = el("div", "panel empty");
+      none.appendChild(el("p", "note", short(owner) + " holds no Uniswap v4 position on " + CFG.chain.name + "."));
+      return out.appendChild(none);
+    }
+
+    var groups = {
+      all: function () { return true; },
+      attention: function (x) { return x.findings.some(function (f) { return f.level === "bad" || f.level === "warn"; }); },
+      out: function (x) { return !x.position.inRange && x.position.liquidity !== "0"; },
+      tenure: function (x) { return x.lease && x.lease.available; },
+    };
+    var labels = { all: "All", attention: "Needs a look", out: "Out of range", tenure: "Could raise cash" };
+    var filters = el("div", "filters");
+    var list = el("div");
+    function paint() {
+      list.textContent = "";
+      body.positions.filter(groups[pfFilter]).forEach(function (x) { list.appendChild(pfCard(x)); });
+      Array.prototype.forEach.call(filters.children, function (b) { b.setAttribute("aria-pressed", String(b.dataset.f === pfFilter)); });
+    }
+    Object.keys(groups).forEach(function (k) {
+      var n = body.positions.filter(groups[k]).length;
+      if (k !== "all" && !n) return;
+      var b = el("button", null, labels[k]);
+      b.type = "button";
+      b.dataset.f = k;
+      b.appendChild(el("b", null, String(n)));
+      b.addEventListener("click", function () { pfFilter = k; paint(); });
+      filters.appendChild(b);
+    });
+    if (!groups[pfFilter] || !body.positions.filter(groups[pfFilter]).length) pfFilter = "all";
+    out.appendChild(filters);
+    out.appendChild(list);
+    paint();
+    out.appendChild(el("p", "fine", body.disclaimer + " " + s.note));
+  }
+
   // ------------------------------------------------------------------ routing
 
-  var VIEWS = ["value", "market", "you"];
+  var VIEWS = ["value", "positions", "market", "you"];
 
   function show(name) {
     if (VIEWS.indexOf(name) < 0) name = "value";
@@ -1084,6 +1278,7 @@
     quiet();
     if (name === "market") renderMarket();
     if (name === "you") renderYou();
+    if (name === "positions") renderPositions();
   }
 
   function current() { return (location.hash || "#value").slice(1); }
@@ -1092,6 +1287,7 @@
     var v = current();
     if (v === "market") return renderMarket();
     if (v === "you") return renderYou();
+    if (v === "positions") return renderPositions();
   }
 
   // ------------------------------------------------------------------ wiring
@@ -1195,6 +1391,15 @@
     t.addEventListener("click", function () { location.hash = "#" + t.dataset.go; });
   });
   window.addEventListener("hashchange", function () { show(current()); });
+  $("pf-go").addEventListener("click", renderPositions);
+  $("pf-owner").addEventListener("keydown", function (e) { if (e.key === "Enter") renderPositions(); });
+  // A wallet that connects, disconnects or changes account while this screen is open is a new question.
+  var lastAccount = null;
+  Wallet.on(function (s) {
+    if ((s.account || null) === lastAccount) return;
+    lastAccount = s.account || null;
+    if (current() === "positions" && !$("pf-owner").value.trim()) renderPositions();
+  });
 
   /** The opening screen is a valuation where there is a service to do it, and an offer where
       there is not. Saying which avoids a button called "Value it" that values nothing. */
