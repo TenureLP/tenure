@@ -50,6 +50,13 @@ While a deal is Listed, the seller can `cancel` it and withdraw their position.
 
 ## 2. Funding
 
+<figure class="shot">
+  <div class="bar"><i></i><i></i><i></i></div>
+  <img src="/shots/deal-card.jpg" alt="A listed deal" loading="lazy">
+  <figcaption>A listed deal, as a financier sees it on the market.</figcaption>
+</figure>
+
+
 A financier calls `fund`. They pay the price in USDG, and the vault:
 
 - records them as the **owner** of the position,

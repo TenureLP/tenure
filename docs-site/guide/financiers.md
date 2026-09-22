@@ -29,12 +29,26 @@ funding, look at:
 
 ## Funding
 
+<figure class="shot">
+  <div class="bar"><i></i><i></i><i></i></div>
+  <img src="/shots/market.jpg" alt="A listing on the market" loading="lazy">
+  <figcaption>Every open listing, with the pair and the rent on price, per term and per year.</figcaption>
+</figure>
+
+
 In the app, open **Market**, pick a listing and click **Fund it**. Two transactions:
 
 1. **Step 1 of 2** approves exactly the price in USDG (never an unlimited allowance),
 2. **Step 2 of 2** funds the deal.
 
 ## During the lease
+
+<figure class="shot">
+  <div class="bar"><i></i><i></i><i></i></div>
+  <img src="/shots/financier.jpg" alt="The financier's view of an active deal" loading="lazy">
+  <figcaption>Claim the rent so far, or sell your side. The lessee's terms never change.</figcaption>
+</figure>
+
 
 - **Claim the rent so far** credits the accrued rent to your balance. Anyone may trigger it; it always
   pays you.

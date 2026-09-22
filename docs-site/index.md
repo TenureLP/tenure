@@ -20,19 +20,36 @@ hero:
       link: /guide/testnet
 
 features:
-  - title: No loan
+  - icon: { src: /icons/coins.svg }
+    title: No loan
     details: Nothing is lent. The position is sold, then leased back. There is no debt, so there is no interest rate and no health factor.
-  - title: No liquidation
+  - icon: { src: /icons/shield.svg }
+    title: No liquidation
     details: Nothing can be seized. If the lessee never buys back, the financier simply keeps what they already own.
-  - title: No oracle
+  - icon: { src: /icons/no-oracle.svg }
+    title: No oracle
     details: The deal path reads no price feed. Every figure is agreed upfront by the two parties and enforced by the contract.
-  - title: Keep the fees
+  - icon: { src: /icons/chart.svg }
+    title: Keep the fees
     details: For the whole lease, the lessee collects the swap fees the position earns, as often as they like. The liquidity itself cannot be touched.
-  - title: A buyback that cannot grow
+  - icon: { src: /icons/ceiling.svg }
+    title: A buyback that cannot grow
     details: The buyback price can never exceed the sale price. The financier is paid rent for the use of the asset, never for the passage of time.
-  - title: A primitive, not a platform
+  - icon: { src: /icons/no-owner.svg }
+    title: A primitive, not a platform
     details: The vault has no owner, no fee, no pause, no upgrade path and no allowlist. Once deployed, nobody can change what it does.
 ---
+
+## The app, as it runs
+
+<div class="gallery">
+  <a href="/guide/sellers"><img src="/shots/value-position.jpg" alt="Valuing position 3093793" loading="lazy"><span><b>Value</b> what it holds and earns</span></a>
+  <a href="/guide/financiers"><img src="/shots/market.jpg" alt="A listing on the market" loading="lazy"><span><b>Market</b> somebody funds it</span></a>
+  <a href="/guide/sellers#during-the-lease"><img src="/shots/lessee.jpg" alt="The lessee's view of an active deal" loading="lazy"><span><b>You</b> keep the fees, buy it back</span></a>
+</div>
+
+Real screens, from the app running against a fork of Robinhood Chain with the real USDG and the real
+Uniswap v4 contracts. [See every screen](/app/).
 
 ## In one paragraph
 

@@ -75,3 +75,43 @@ body {
 .pill.live { background: rgba(123, 224, 166, .12); color: #7BE0A6; }
 .pill.soon { background: rgba(245, 184, 75, .14); color: #F5B84B; }
 .pill.no { background: rgba(255, 139, 123, .12); color: #FF8B7B; }
+.pill.live::before, .pill.soon::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; margin-right: 6px; vertical-align: middle; animation: blink 2s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .3; } }
+
+/* ------------------------------------------------------------------ screens of the app */
+/* A screenshot sits in a window frame, so it reads as the app and not as a diagram. */
+.vp-doc figure.shot { margin: 22px 0 26px; border: 1px solid rgba(244, 241, 234, .16); border-radius: 14px; overflow: hidden;
+  background: #0A111D; box-shadow: 0 24px 60px rgba(0, 0, 0, .45); animation: shot-in .6s cubic-bezier(.2, .7, .2, 1) both; }
+.vp-doc figure.shot .bar { height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 12px; background: #0B1320;
+  border-bottom: 1px solid rgba(244, 241, 234, .08); }
+.vp-doc figure.shot .bar i { width: 9px; height: 9px; border-radius: 50%; background: rgba(244, 241, 234, .16); }
+.vp-doc figure.shot img { display: block; width: 100%; height: auto; max-height: 560px; object-fit: cover; object-position: top; }
+.vp-doc figure.shot figcaption { padding: 12px 16px; font-size: 14px; color: var(--vp-c-text-2); border-top: 1px solid rgba(244, 241, 234, .08); background: #0E1726; }
+@keyframes shot-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+.vp-doc .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 20px 0 14px; }
+.vp-doc .gallery a { display: block; border: 1px solid rgba(244, 241, 234, .14); border-radius: 14px; overflow: hidden; background: #0E1726;
+  text-decoration: none; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
+.vp-doc .gallery a:hover { transform: translateY(-4px); border-color: rgba(245, 184, 75, .55); box-shadow: 0 20px 50px rgba(0, 0, 0, .45); }
+.vp-doc .gallery img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: left top; }
+.vp-doc .gallery span { display: block; padding: 10px 14px; font-size: 14px; color: var(--vp-c-text-2); }
+.vp-doc .gallery b { color: var(--vp-c-text-1); margin-right: 6px; }
+@media (max-width: 640px) { .vp-doc .gallery { grid-template-columns: 1fr; } }
+
+/* ------------------------------------------------------------------ the home page, alive */
+.VPHero .image-src { animation: hover 7s ease-in-out infinite alternate; }
+@keyframes hover { from { transform: translate(-50%, -50%) translateY(0); } to { transform: translate(-50%, -50%) translateY(-14px); } }
+.VPHero .name, .VPHero .text, .VPHero .tagline, .VPHero .actions { animation: shot-in .7s cubic-bezier(.2, .7, .2, 1) both; }
+.VPHero .text { animation-delay: .06s; } .VPHero .tagline { animation-delay: .12s; } .VPHero .actions { animation-delay: .18s; }
+.VPFeatures .item { animation: shot-in .6s cubic-bezier(.2, .7, .2, 1) both; }
+.VPFeatures .item:nth-child(2) { animation-delay: .05s; } .VPFeatures .item:nth-child(3) { animation-delay: .1s; }
+.VPFeatures .item:nth-child(4) { animation-delay: .15s; } .VPFeatures .item:nth-child(5) { animation-delay: .2s; }
+.VPFeatures .item:nth-child(6) { animation-delay: .25s; }
+.VPFeature { transition: transform .18s ease, border-color .18s ease; }
+.VPFeature:hover { transform: translateY(-3px); border-color: rgba(245, 184, 75, .45); }
+.VPFeature .icon { background: linear-gradient(180deg, rgba(245, 184, 75, .17), rgba(245, 184, 75, .05)); border: 1px solid rgba(245, 184, 75, .28); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

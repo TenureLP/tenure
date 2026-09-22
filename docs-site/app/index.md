@@ -5,6 +5,13 @@ single page: three screens, one wallet button, nothing to install.
 
 ## The three screens
 
+<figure class="shot">
+  <div class="bar"><i></i><i></i><i></i></div>
+  <img src="/shots/value-start.jpg" alt="The app's first screen" loading="lazy">
+  <figcaption>The first screen: paste a position id, or try one of the examples.</figcaption>
+</figure>
+
+
 **Value** (on testnet, **Offer**). Paste a position id and see what it holds, what its range actually
 earned over a day of chain history, and the terms it could be offered on. With a vault deployed, list
 it from the same screen.
@@ -15,6 +22,12 @@ price per term and per year. Fund one from here.
 **You.** Every deal you are a party to, on either side, and whatever the vault holds for you: USDG to
 withdraw, and positions to withdraw. The actions for each deal sit on its card: collect the fees, buy
 it back, claim the rent, sell your side, take delivery.
+
+<figure class="shot">
+  <div class="bar"><i></i><i></i><i></i></div>
+  <img src="/shots/deal-card.jpg" alt="A deal card" loading="lazy">
+  <figcaption>A deal card: the pair, the rent on price, and the one action that applies to you.</figcaption>
+</figure>
 
 ## Chains
 

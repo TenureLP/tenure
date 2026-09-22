@@ -26,6 +26,13 @@ eventually try to sell. This one is worth exactly nothing, by construction.
 
 ### No valuation, so you write the terms
 
+<figure class="shot">
+  <div class="bar"><i></i><i></i><i></i></div>
+  <img src="/shots/testnet.jpg" alt="The app in testnet mode" loading="lazy">
+  <figcaption>On testnet the first screen is Offer: paste a position, the chain confirms who holds it, you write the terms.</figcaption>
+</figure>
+
+
 The valuation API prices a position in USDG by reading USDG pools, and the testnet has none. On
 testnet the app's first screen is **Offer** instead of **Value**: you paste a position id, the app
 confirms from the chain who holds it, and you write the price, buyback and rent yourself.

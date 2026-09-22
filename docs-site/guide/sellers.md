@@ -14,6 +14,13 @@ earns. You sell it to a financier, lease it back, and keep collecting its fees u
 
 ## Choosing the terms
 
+<figure class="shot">
+  <div class="bar"><i></i><i></i><i></i></div>
+  <img src="/shots/value-position.jpg" alt="Position 3093793 valued" loading="lazy">
+  <figcaption>What the position holds, and what its range really earned over a day of chain history.</figcaption>
+</figure>
+
+
 The app proposes terms from the valuation API: a sale price at a discount to market value, a buyback
 equal to the sale price, and a rent sized from what the range actually earned over the last day. Every
 field is yours to change.
@@ -38,6 +45,13 @@ the rent as a share of the price, per term and per year, so you can compare it w
 
 ## Listing
 
+<figure class="shot">
+  <div class="bar"><i></i><i></i><i></i></div>
+  <img src="/shots/value-terms.jpg" alt="Indicative terms and the listing form" loading="lazy">
+  <figcaption>The Value screen proposes terms from the valuation; every field is yours to change.</figcaption>
+</figure>
+
+
 In the app, open **Value** (or **Offer** on testnet), paste your position id, check the terms and
 click **List this position**. Two transactions:
 
@@ -48,6 +62,13 @@ Each is dry-run first, so a refusal shows its reason before your wallet opens. O
 position sits in the vault until a financier funds it, the offer expires, or you **cancel** it.
 
 ## During the lease
+
+<figure class="shot">
+  <div class="bar"><i></i><i></i><i></i></div>
+  <img src="/shots/lessee.jpg" alt="The lessee's view of an active deal" loading="lazy">
+  <figcaption>Your proceeds, the fees to collect, and the buyback, all on the You screen.</figcaption>
+</figure>
+
 
 Your proceeds are in the vault as a balance: withdraw them from the **You** screen whenever you like.
 
