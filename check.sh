@@ -118,6 +118,44 @@ print("   refuses with 503, and the import sets nothing")
 PY
 note $?
 
+step "App: the production server serves the page and nothing beside it"
+# The app directory holds a deploy script, a dev chain launcher and the tests. The server is the
+# only thing between them and the internet, so its list is checked by asking for them, both ways.
+python3 - <<'PY'
+import sys, threading, urllib.request, urllib.error
+sys.path.insert(0, "app")
+from http.server import ThreadingHTTPServer
+from functools import partial
+import server
+server.ProdHandler.log_message = lambda *a: None  # the 404s are the point, not news
+
+httpd = ThreadingHTTPServer(("127.0.0.1", 0), partial(server.ProdHandler, directory=server.HERE))
+threading.Thread(target=httpd.serve_forever, daemon=True).start()
+base = "http://127.0.0.1:%d" % httpd.server_address[1]
+
+def status(path, method="GET"):
+    try:
+        with urllib.request.urlopen(urllib.request.Request(base + path, method=method)) as r:
+            return r.status, r.headers
+    except urllib.error.HTTPError as e:
+        return e.code, e.headers
+
+for path in ("/", "/index.html", "/app.js", "/config.js", "/assets/logo-mark-small.svg"):
+    code, headers = status(path)
+    assert code == 200, (path, code)
+code, headers = status("/")
+csp = headers["content-security-policy"]
+assert "frame-ancestors 'none'" in csp and "script-src 'self'" in csp, csp
+assert "https://rpc.mainnet.chain.robinhood.com" in csp, "config.js origins missing from connect-src"
+for path in ("/server.py", "/dev_server.py", "/devchain.sh", "/test/eth.test.js", "/README.md",
+             "/Dockerfile", "/assets/../server.py", "/assets/%2e%2e/server.py"):
+    for method in ("GET", "HEAD"):
+        assert status(path, method)[0] == 404, (method, path)
+httpd.shutdown()
+print("   page served with its headers; source refused on GET and HEAD")
+PY
+note $?
+
 if [ "${1:-}" = "--fork" ]; then
   step "Solidity: fork integration tests"
   (cd lease-vault && ./fork-test.sh); note $?

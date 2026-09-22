@@ -26,6 +26,10 @@ window.TENURE = {
       usdgDecimals: 6,
       posm: "0x58daec3116aae6D93017bAAea7749052E8a04fA7",
 
+      /* Offered on the empty screen so the first thing a visitor sees is a real answer. Checked
+         to be live and quotable; replace it when it stops being either. */
+      examples: ["3093793", "3094115"],
+
       vault: ""
     },
 
@@ -41,6 +45,8 @@ window.TENURE = {
       usdgSymbol: "tUSDG",
       usdgDecimals: 6,
       posm: "0x58daec3116aae6D93017bAAea7749052E8a04fA7",
+
+      examples: ["5099"],
 
       vault: ""
     }

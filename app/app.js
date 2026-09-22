@@ -97,6 +97,60 @@
 
   function short(a) { return a ? a.slice(0, 6) + "…" + a.slice(-4) : "—"; }
 
+  /** An explorer link for an address, shortened, with the whole address on hover. Plain text on a
+      fork, where the explorer has never heard of anything. */
+  function addr(a) {
+    var usable = CFG.chain.explorer && !CFG.devWallet && !(isLocal && params.get("rpc"));
+    var node = el(usable ? "a" : "span", null, HAS_VAULT && same(a, CFG.vault) ? "the vault" : short(a));
+    node.title = a;
+    if (usable) {
+      node.href = CFG.chain.explorer.replace(/\/$/, "") + "/address/" + a;
+      node.target = "_blank";
+      node.rel = "noopener";
+    }
+    return node;
+  }
+
+  function rowNode(parent, k, node) {
+    var r = row(parent, k, "");
+    r.querySelector(".v").appendChild(node);
+    return r;
+  }
+
+  function loading(text) {
+    var p = el("div", "panel");
+    p.appendChild(el("div", "loading", text));
+    return p;
+  }
+
+  /** The token a pool is quoted in, read from the token itself. A symbol is whatever the token's
+      author chose, so it is length-limited and printed as text, never markup. */
+  var symbols = {};
+  function bytesToText(h) { return decodeURIComponent(h.replace(/../g, function (b) { return "%" + b; })); }
+  function symbolOf(address) {
+    var a = String(address).toLowerCase();
+    if (/^0x0{40}$/.test(a)) return Promise.resolve("ETH");
+    if (!symbols[a]) {
+      symbols[a] = call(address, window.TENURE_ABI.token["symbol()"]).then(function (data) {
+        var hex = String(data || "").replace(/^0x/, "");
+        var text = hex.length === 64
+          ? bytesToText(hex).replace(/\u0000+$/, "")
+          : bytesToText(hex.slice(128, 128 + parseInt(hex.slice(64, 128), 16) * 2));
+        text = text.replace(/[\u0000-\u001f]/g, "").trim();
+        return text ? text.slice(0, 12) : short(address);
+      }).catch(function () { return short(address); });
+    }
+    return symbols[a];
+  }
+
+  /** Rent as a share of the price, over the term and scaled to a year. What a financier compares
+      one listing with another on. Integer arithmetic until the very last step. */
+  function rentOnPrice(d) {
+    if (!d.price || d.price === 0n || !d.term) return null;
+    var period = Number(d.rent * 1000000n / d.price) / 10000;
+    return { period: period, yearly: period * 31536000 / Number(d.term) };
+  }
+
   /** "1 deal has" / "4 deals have". A page that says "1 deals" was written by nobody. */
   function count(n, noun) {
     return n + " " + noun + (n === 1 ? " has" : "s have");
@@ -263,7 +317,7 @@
       var hash = await Wallet.send(to, data);
       button.textContent = "waiting for the block…";
       await Wallet.wait(hash);
-      say(sentence(label.replace(/…$/, "") + " done"), "ok", txLink(hash));
+      say(sentence(label.replace(/^Step \d of \d · /, "").replace(/…$/, "") + " done"), "ok", txLink(hash));
       if (after) await after();
     } catch (err) {
       var text = Eth.explain(err);
@@ -279,11 +333,11 @@
       permanent, and this vault is not special enough to deserve one. */
   async function ensureUsdgAllowance(button, amount) {
     var have = await usdgAllowance(Wallet.state.account);
-    if (have >= amount) return true;
+    if (have >= amount) return "ready";
     var data = tokenData("approve(address,uint256)", ["address", "uint256"], [CFG.vault, amount]);
     var done = false;
-    await act(button, "approving " + money2(amount) + "…", CFG.usdg, data, function () { done = true; });
-    return done;
+    await act(button, "Step 1 of 2 · approving " + money2(amount) + "…", CFG.usdg, data, function () { done = true; });
+    return done ? "approved" : false;
   }
 
   // ------------------------------------------------------------------ view: value
@@ -345,8 +399,15 @@
     var p = el("div", "panel");
     p.appendChild(el("h2", null, "Position " + tokenId));
     var rows = el("div", "rows");
-    row(rows, "Held by", owner);
-    row(rows, "Settlement token", CFG.usdg ? tok() + " · " + CFG.usdg : "none configured");
+    rowNode(rows, "Held by", addr(owner));
+    if (CFG.usdg) {
+      var token = el("span");
+      token.appendChild(document.createTextNode(tok() + " · "));
+      token.appendChild(addr(CFG.usdg));
+      rowNode(rows, "Settlement token", token);
+    } else {
+      row(rows, "Settlement token", "none configured");
+    }
     p.appendChild(rows);
     p.appendChild(el("p", "note", "There is no valuation service on " + CFG.chain.name + ": it " +
       "prices positions in USDG by reading USDG pools, and this chain has none. What it holds and " +
@@ -380,12 +441,14 @@
 
     var rows = el("div", "rows");
     row(rows, "Pair", (pool.token0 && pool.token0.symbol) + " / " + (pool.token1 && pool.token1.symbol));
-    var owner = row(rows, "Owner", pos.owner || d.owner || "—");
+    var owner = rowNode(rows, "Owner", addr(pos.owner || d.owner || "—"));
     // Asked of the chain this page is configured for. The API answers about the chain it is
     // configured for, and the listing button acts on this one, so this is the row that has to be
     // right. They agree in production and they do not agree against a fork.
     positionOwner(d.tokenId).then(function (a) {
-      owner.querySelector(".v").textContent = a;
+      var v = owner.querySelector(".v");
+      v.textContent = "";
+      v.appendChild(addr(a));
     }, function () { /* a node that will not answer leaves the API's reading in place */ });
     row(rows, "Range", pos.tickLower + " → " + pos.tickUpper);
     row(rows, "Liquidity", pos.liquidity);
@@ -465,6 +528,22 @@
         "somebody can fund."));
       return p;
     }
+    // A position already inside a deal is held by the vault itself, and listing it again can only
+    // be refused. Say where it is instead of offering a form that cannot work.
+    positionOwner(d.tokenId).then(async function (owner) {
+      if (!same(owner, CFG.vault)) return;
+      var deals = await allDeals();
+      var mine = deals.filter(function (x) { return x.tokenId === BigInt(d.tokenId); }).pop();
+      p.textContent = "";
+      p.appendChild(el("h2", null, "Already in a deal"));
+      p.appendChild(el("p", "note", "The vault holds this position" +
+        (mine ? ", under deal " + mine.id : "") + ", so it cannot be offered again until that deal ends."));
+      var bar = el("div", "bar");
+      bar.appendChild(goTo("See your deals", "you", "primary"));
+      bar.appendChild(goTo("Browse the market", "market", "ghost"));
+      p.appendChild(bar);
+    }).catch(function () { /* the vault's dry-run still refuses it, by name */ });
+
     var quote = d.quote || {};
     // A chain with no valuation service still has a vault. There, the terms are the seller's to
     // write, and the vault is the thing that checks them: every listing is dry-run with eth_call
@@ -613,10 +692,11 @@
 
       // The vault takes delivery of the NFT inside list(), so it has to be approved first.
       var approved = await positionApproved(d.tokenId);
-      if (!same(approved, CFG.vault)) {
+      var twoSteps = !same(approved, CFG.vault);
+      if (twoSteps) {
         var okd = false;
         var data = tokenData("approve(address,uint256)", ["address", "uint256"], [CFG.vault, d.tokenId]);
-        await act(go, "approving the position…", CFG.posm, data, function () { okd = true; });
+        await act(go, "Step 1 of 2 · approving the position…", CFG.posm, data, function () { okd = true; });
         if (!okd) return;
       }
 
@@ -626,7 +706,8 @@
       // act() re-enables its button when it finishes, which left a live "List" button under a
       // position that had already gone into the vault. The panel is replaced instead.
       var listedAs = null;
-      await act(go, "listing…", CFG.vault, cd, async function () { listedAs = await vault("dealCount()"); });
+      await act(go, (twoSteps ? "Step 2 of 2 · " : "") + "listing…", CFG.vault, cd,
+                async function () { listedAs = await vault("dealCount()"); });
       if (listedAs === null) return;
       p.textContent = "";
       p.appendChild(el("h2", null, "Offered"));
@@ -652,7 +733,7 @@
     out.textContent = "";
     if (!HAS_VAULT) return out.appendChild(noVault());
 
-    out.appendChild(el("p", "note", "Reading the vault…"));
+    out.appendChild(loading("Reading the vault"));
     var deals;
     try {
       await readChainClock();
@@ -667,13 +748,32 @@
 
     out.textContent = "";
     if (!open.length) {
-      var p = el("div", "panel");
+      var p = el("div", "panel empty");
       p.appendChild(el("p", "note", deals.length
         ? "Nothing is on offer right now. " + count(deals.length, "deal") + " been listed here."
         : "Nothing has been listed on this vault yet."));
+      p.appendChild(goTo("Offer a position", "value", "primary"));
       return out.appendChild(p);
     }
     open.forEach(function (d) { out.appendChild(dealCard(d, "market")); });
+  }
+
+  /** Why a payment cannot go ahead, and the way out when the money is only one step away: sitting
+      in the vault, credited to this account, waiting to be withdrawn. */
+  async function shortOf(what, need, have) {
+    var text = what + " needs " + money2(need) + " and you hold " + money2(have) + ".";
+    try {
+      var owed = await vault("balances(address)", [Wallet.state.account]);
+      if (have + owed >= need) text += " The vault holds " + money2(owed) + " for you: withdraw it on the You screen first.";
+    } catch (e) { /* the reason above stands on its own */ }
+    return text;
+  }
+
+  function goTo(label, view, cls) {
+    var b = el("button", (cls || "ghost") + " small", label);
+    b.type = "button";
+    b.addEventListener("click", function () { location.hash = "#" + view; });
+    return b;
   }
 
   function noVault() {
@@ -700,7 +800,7 @@
       return out.appendChild(p);
     }
 
-    out.appendChild(el("p", "note", "Reading the vault…"));
+    out.appendChild(loading("Reading the vault"));
     var deals, owed, held;
     try {
       await readChainClock();
@@ -761,8 +861,12 @@
     });
 
     if (!mine.length) {
-      var none = el("div", "panel");
-      none.appendChild(el("p", "note", "You are not a party to any deal on this vault."));
+      var none = el("div", "panel empty");
+      none.appendChild(el("p", "note", "You are not a party to any deal on this vault yet."));
+      var bar = el("div", "bar");
+      bar.appendChild(goTo("Browse the market", "market", "primary"));
+      bar.appendChild(goTo("Offer a position", "value", "ghost"));
+      none.appendChild(bar);
       out.appendChild(none);
       return;
     }
@@ -789,6 +893,23 @@
     if (isSeller) head.appendChild(el("span", "pill ok", "you are the lessee"));
     if (isFinancier) head.appendChild(el("span", "pill ok", "you are the financier"));
     card.appendChild(head);
+
+    var sub = el("div", "sub");
+    var pair = el("span", "pair", "…");
+    sub.appendChild(pair);
+    Promise.all([symbolOf(d.currency0), symbolOf(d.currency1)]).then(function (s) {
+      pair.textContent = s[0] + " / " + s[1];
+    });
+    var r = rentOnPrice(d);
+    if (r) {
+      var y = el("span", "yield");
+      y.appendChild(document.createTextNode("Rent on price "));
+      y.appendChild(el("b", null, r.period.toFixed(2) + " %"));
+      y.appendChild(document.createTextNode(" over " + duration(d.term) + " · about " +
+        (r.yearly >= 100 ? Math.round(r.yearly) : r.yearly.toFixed(1)) + " % a year"));
+      sub.appendChild(y);
+    }
+    card.appendChild(sub);
 
     var terms = el("div", "terms");
     term(terms, "SALE PRICE", money2(d.price));
@@ -829,10 +950,12 @@
           }
           var have = await usdgBalance(Wallet.state.account);
           if (have < d.price) {
-            return say("Funding this needs " + money2(d.price) + " and you hold " + money2(have) + ".", "err");
+            return say(await shortOf("Funding this", d.price, have), "err");
           }
-          if (!(await ensureUsdgAllowance(b, d.price))) return;
-          await act(b, "funding…", CFG.vault, Eth.calldata("fund(uint256)", [d.id]), refresh);
+          var allowed = await ensureUsdgAllowance(b, d.price);
+          if (!allowed) return;
+          await act(b, (allowed === "approved" ? "Step 2 of 2 · " : "") + "funding…", CFG.vault,
+                    Eth.calldata("fund(uint256)", [d.id]), refresh);
         });
       }
       if (isSeller) {
@@ -853,10 +976,12 @@
         button("Buy it back · " + money2(d.buybackPrice), "primary", async function (b) {
           var have = await usdgBalance(Wallet.state.account);
           if (have < d.buybackPrice) {
-            return say("Buying it back needs " + money2(d.buybackPrice) + " and you hold " + money2(have) + ".", "err");
+            return say(await shortOf("Buying it back", d.buybackPrice, have), "err");
           }
-          if (!(await ensureUsdgAllowance(b, d.buybackPrice))) return;
-          await act(b, "buying back…", CFG.vault, Eth.calldata("buyBack(uint256)", [d.id]), refresh);
+          var allowed = await ensureUsdgAllowance(b, d.buybackPrice);
+          if (!allowed) return;
+          await act(b, (allowed === "approved" ? "Step 2 of 2 · " : "") + "buying back…", CFG.vault,
+                    Eth.calldata("buyBack(uint256)", [d.id]), refresh);
         });
       }
       if (isFinancier) {
@@ -974,20 +1099,13 @@
         && !pinned) {
       return switchTo(s.chainId);
     }
-    if (!s.account) {
-      net.textContent = "not connected";
-      net.className = "net";
-      connect.textContent = "Connect wallet";
-      return;
-    }
-    connect.textContent = short(s.account);
-    if (s.chainId === CFG.chain.id) {
-      net.textContent = CFG.chain.name + " · " + CFG.chain.id;
-      net.className = "net on";
-    } else {
-      net.textContent = "wrong network · switch to " + CFG.chain.id;
-      net.className = "net off";
-    }
+    // The chain is already named by the selector and the account by the wallet button, so the
+    // network indicator only appears when something needs doing, and it is the thing to click.
+    connect.textContent = s.account ? short(s.account) : "Connect wallet";
+    connect.title = s.account || "";
+    var wrong = !!s.account && !!s.chainId && s.chainId !== CFG.chain.id;
+    net.classList.toggle("hidden", !wrong);
+    if (wrong) net.textContent = "Switch to " + CFG.chain.name;
   }
 
   function paintDevBanner() {
@@ -1030,15 +1148,28 @@
       if (id === CFG.chain.id) o.selected = true;
       sel.appendChild(o);
     });
-    $("foot").textContent = HAS_VAULT
-      ? "Vault " + CFG.vault + " on " + CFG.chain.name + ". "
-      : "No contract is deployed on " + CFG.chain.name + " yet, so nothing here can be listed or funded. ";
+    var foot = $("foot");
+    foot.textContent = "";
+    if (HAS_VAULT) {
+      foot.appendChild(document.createTextNode("Vault "));
+      foot.appendChild(addr(CFG.vault));
+      foot.appendChild(document.createTextNode(" on " + CFG.chain.name + ". "));
+    } else {
+      foot.textContent = "No contract is deployed on " + CFG.chain.name +
+        " yet, so nothing here can be listed or funded. ";
+    }
     paintValueScreen();
     paintWallet(Wallet.state);
   }
 
   $("chain").addEventListener("change", function () { pinned = true; switchTo(Number(this.value)); });
   $("connect").addEventListener("click", doConnect);
+  $("net").addEventListener("click", function () {
+    Wallet.switchChain().then(function () { quiet(); refresh(); }, function (err) {
+      var text = Eth.explain(err);
+      if (text) say(text, "err");
+    });
+  });
   $("lookup").addEventListener("click", lookup);
   $("tokenId").addEventListener("keydown", function (e) { if (e.key === "Enter") lookup(); });
   Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (t) {
@@ -1059,6 +1190,19 @@
         "are yours; the vault refuses anything it cannot settle.";
     $("lookup").textContent = CFG.api ? "Value it" : "Check it";
     document.querySelector('[data-go="value"]').textContent = CFG.api ? "Value" : "Offer";
+    $("tokenId").placeholder = "Position id" + ((CFG.examples || [])[0] ? ", for example " + CFG.examples[0] : "");
+
+    var tryIt = $("try");
+    tryIt.textContent = "";
+    if ((CFG.examples || []).length) {
+      tryIt.appendChild(el("span", null, "Try one:"));
+      CFG.examples.forEach(function (id) {
+        var chip = el("button", "chip", id);
+        chip.type = "button";
+        chip.addEventListener("click", function () { $("tokenId").value = id; lookup(); });
+        tryIt.appendChild(chip);
+      });
+    }
   }
 
   Wallet.init(CFG);
