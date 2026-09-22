@@ -20,8 +20,9 @@ Stage a clean copy of exactly what is committed, and deploy that:
 
 ```bash
 rm -rf /tmp/deploy && mkdir -p /tmp/deploy
-git archive HEAD lp-api landing | tar -x -C /tmp/deploy
+git archive HEAD lp-api landing app | tar -x -C /tmp/deploy
 cd /tmp/deploy/lp-api && railway up --service api --detach
+cd /tmp/deploy/app && railway up --service app --detach   # the app: static, no variables
 ```
 
 Linking is per directory, so a staged copy needs
@@ -142,8 +143,9 @@ logs at boot, so a misconfigured deployment is visible without having to sign up
 |---|---|
 | API | `https://api-production-9e87.up.railway.app` — try `/health`, or `/v1/position/2908278/quote` |
 | Landing | `https://landing-production-abe1.up.railway.app` |
+| App | `https://app-production-7810.up.railway.app` — Robinhood Chain and testnet; listing waits on a deployed vault |
 
-Both are generated Railway subdomains and will change the day a real domain is pointed at them.
+All three are generated Railway subdomains and will change the day a real domain is pointed at them.
 
 ## 3. Afterwards
 
