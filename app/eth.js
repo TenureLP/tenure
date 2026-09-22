@@ -36,12 +36,14 @@ window.Eth = (function () {
     if (type === "address") {
       var a = strip(value);
       if (!/^[0-9a-f]{40}$/i.test(a)) throw new Error("not an address: " + value);
-      return word(a);
+      // Lower case, as every other encoder writes it. Hex is case-insensitive to the EVM, but the
+      // bytes a wallet shows and signs should have one form, not whatever case was pasted in.
+      return word(a.toLowerCase());
     }
     if (type === "bytes32") {
       var b = strip(value);
-      if (b.length !== 64) throw new Error("not a bytes32: " + value);
-      return b;
+      if (!/^[0-9a-f]{64}$/i.test(b)) throw new Error("not a bytes32: " + value);
+      return b.toLowerCase();
     }
     if (type === "bool") return word(value ? "1" : "0");
     throw new Error("this coder only handles static types, not " + type);

@@ -60,6 +60,20 @@ step "API: openapi.json is not stale"
   && python3 make-openapi-json.py --check \
   || echo "   skipped, PyYAML not installed"); note $?
 
+step "App: the codec that encodes every transaction agrees with cast"
+# Node is only needed here, and is not a dependency of anything that ships. Skipped rather than
+# failed when it is absent, the same way the PyYAML check is.
+NODE=$(command -v node || ls -d $HOME/.nvm/versions/node/*/bin/node 2>/dev/null | tail -1)
+if [ -n "$NODE" ]; then
+  "$NODE" --test app/test/*.test.js >/tmp/tenure-app-tests.log 2>&1
+  r=$?; grep -E '^# (pass|fail)' /tmp/tenure-app-tests.log | tr '
+' ' ' | sed 's/^/   /'; echo
+  [ $r -ne 0 ] && grep -E '^not ok' /tmp/tenure-app-tests.log | sed 's/^/   /'
+  note $r
+else
+  echo '   skipped, no node on this machine'; note 0
+fi
+
 step "App: abi.js is not stale"
 # The page calls the contract by selector. If this file and the compiled contract ever disagree,
 # every button on the page is calling something else.

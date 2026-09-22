@@ -68,16 +68,24 @@ window.Wallet = (function () {
 
   // ------------------------------------------------------------------ connection
 
+  /** Called again every time the page changes chain. The configuration is swapped each time; the
+      provider and its listeners are made once, or every switch would add another pair of
+      listeners, and in development would throw away the account that had been chosen. */
   function init(config) {
     cfg = config;
+    if (provider) return true;
     if (cfg.devWallet) {
       provider = devProvider(cfg.chain.rpc, cfg.devAccount);
       state.kind = "dev";
     } else if (window.ethereum) {
       provider = window.ethereum;
       state.kind = "injected";
-      provider.on("chainChanged", function (id) { state.chainId = Number(id); emit(); });
-      provider.on("accountsChanged", function (a) { state.account = (a && a[0]) || null; emit(); });
+      // Not every injected provider implements events; the page still works without them, it
+      // just learns about a switch on the next action instead of immediately.
+      if (typeof provider.on === "function") {
+        provider.on("chainChanged", function (id) { state.chainId = Number(id); emit(); });
+        provider.on("accountsChanged", function (a) { state.account = (a && a[0]) || null; emit(); });
+      }
     }
     return !!provider;
   }

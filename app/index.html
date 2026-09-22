@@ -140,6 +140,7 @@
   .msg.err { background: rgba(255,139,123,.09); border-left: 3px solid var(--bad); }
   .msg.info { background: rgba(245,184,75,.08); border-left: 3px solid var(--amber); }
   .msg.ok { background: rgba(123,224,166,.09); border-left: 3px solid var(--ok); }
+  .msg a { color: inherit; font-weight: 600; text-underline-offset: 3px; }
 
   /* ---------------------------------------------------------------- deal cards */
   .deal { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
@@ -203,7 +204,7 @@
     <button class="ghost small" id="connect" type="button">Connect wallet</button>
   </nav>
 
-  <div class="msg" id="msg"></div>
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
 
   <!-- ------------------------------------------------------------ value -->
   <section data-view="value">

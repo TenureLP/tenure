@@ -32,7 +32,7 @@ window.TENURE = {
     46630: {
       name: "Robinhood testnet",
       rpc: "https://rpc.testnet.chain.robinhood.com",
-      explorer: "https://robinhoodchain.blockscout.com",
+      explorer: "https://explorer.testnet.chain.robinhood.com",
       api: null,
 
       /* Same v4 addresses as the mainnet, checked. The settlement token is a TestUSDG anyone can

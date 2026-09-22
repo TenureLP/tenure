@@ -17,6 +17,9 @@
 
   var params = new URLSearchParams(location.search);
   var isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  // A chain the reader chose -- in the url they opened, or from the selector -- is kept. One the
+  // page only followed because a wallet sat on it is not, so the next wallet switch is followed too.
+  var pinned = !!params.get("chain");
 
   var CFG, HAS_VAULT, DEC;
 
@@ -68,11 +71,26 @@
     return e;
   }
 
-  function say(text, kind) {
+  function say(text, kind, link) {
     var m = $("msg");
     m.textContent = text;
+    if (link) {
+      m.appendChild(document.createTextNode(" "));
+      var a = el("a", null, link.label);
+      a.href = link.href;
+      a.target = "_blank";
+      a.rel = "noopener";
+      m.appendChild(a);
+    }
     m.className = "msg show " + (kind || "info");
     m.scrollIntoView({ block: "nearest" });
+  }
+
+  /** Where a transaction can be checked by somebody who does not trust this page. Not on a fork:
+      the explorer knows nothing about it and the link would be a dead end dressed as proof. */
+  function txLink(hash) {
+    if (!CFG.chain.explorer || CFG.devWallet || (isLocal && params.get("rpc"))) return null;
+    return { href: CFG.chain.explorer.replace(/\/$/, "") + "/tx/" + hash, label: "View it on the explorer." };
   }
 
   function quiet() { $("msg").className = "msg"; }
@@ -152,6 +170,16 @@
     var n = Number(x);
     if (!isFinite(n) || Math.abs(n) >= 1e15) return null;
     return n.toFixed(places === undefined ? 2 : places);
+  }
+
+  /** A figure for reading, with thousands separated. money() stays plain because it fills
+      inputs, and an input holding "65,126.02" does not parse. */
+  function fmt(x) {
+    var m = money(x);
+    if (m === null) return null;
+    var parts = m.split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join(".");
   }
 
   /** The API writes reasons as fragments, lower case and unpunctuated. Pages are not logs. */
@@ -235,7 +263,7 @@
       var hash = await Wallet.send(to, data);
       button.textContent = "waiting for the block…";
       await Wallet.wait(hash);
-      say(sentence(label.replace(/…$/, "") + " done"), "ok");
+      say(sentence(label.replace(/…$/, "") + " done"), "ok", txLink(hash));
       if (after) await after();
     } catch (err) {
       var text = Eth.explain(err);
@@ -259,8 +287,6 @@
   }
 
   // ------------------------------------------------------------------ view: value
-
-  var lastQuote = null;
 
   async function lookup() {
     var id = $("tokenId").value.trim();
@@ -298,9 +324,11 @@
                    "free, so this is a different instance.", "err");
       }
       if (!res.ok) return say(data.message || data.error || "The chain could not be read right now.", "err");
-      lastQuote = data;
       renderQuote(data);
-      history.replaceState(null, "", "?id=" + id + (location.hash || ""));
+      // Only the id changes. Rebuilding the query from scratch dropped the chain, so a shared or
+      // reloaded valuation came back on the default chain.
+      params.set("id", id);
+      history.replaceState(null, "", "?" + params.toString() + (location.hash || ""));
     } catch (err) {
       say("Could not reach the valuation API: " + (err && err.message ? err.message : err), "err");
     } finally {
@@ -362,9 +390,9 @@
     row(rows, "Range", pos.tickLower + " → " + pos.tickUpper);
     row(rows, "Liquidity", pos.liquidity);
     if (value) {
-      row(rows, "Held", (money(value.principal) || "—") + " " + tok());
-      row(rows, "Uncollected fees", (money(value.fees) || "—") + " " + tok());
-      row(rows, "Market value", (money(value.total) || "—") + " " + tok(), true);
+      row(rows, "Held", (fmt(value.principal) || "—") + " " + tok());
+      row(rows, "Uncollected fees", (fmt(value.fees) || "—") + " " + tok());
+      row(rows, "Market value", (fmt(value.total) || "—") + " " + tok(), true);
     } else if (d.valueNote) {
       row(rows, "Value", d.valueNote);
     }
@@ -377,7 +405,7 @@
     var perDay = rate.available ? money(rate.feesPerDayUSDG) : null;
     if (rate.available && rate.plausible !== false && perDay !== null) {
       var r2 = el("div", "rows");
-      row(r2, "Fees per day", perDay + " " + tok(), true);
+      row(r2, "Fees per day", fmt(rate.feesPerDayUSDG) + " " + tok(), true);
       row(r2, "Fee APR", money(rate.feeAprPercent) ? money(rate.feeAprPercent) + " %" : "—");
       row(r2, "Measured over", duration(rate.windowSeconds) + " of chain history");
       row(r2, "Source", rate.source + (rate.lowConfidence ? " · low confidence" : ""));
@@ -404,9 +432,9 @@
     p3.appendChild(el("h2", null, "Indicative terms"));
     if (quote.available) {
       var tiles = el("div", "tiles");
-      tile(tiles, "SALE PRICE", money(quote.suggestedSalePriceUSDG) || "—", tok(), true);
-      tile(tiles, "BUYBACK", money(quote.suggestedBuybackPriceUSDG) || "—", tok(), true);
-      tile(tiles, "RENT · " + quote.termDays + " DAYS", money(quote.suggestedRentUSDG) || "—", tok());
+      tile(tiles, "SALE PRICE", fmt(quote.suggestedSalePriceUSDG) || "—", tok(), true);
+      tile(tiles, "BUYBACK", fmt(quote.suggestedBuybackPriceUSDG) || "—", tok(), true);
+      tile(tiles, "RENT · " + quote.termDays + " DAYS", fmt(quote.suggestedRentUSDG) || "—", tok());
       p3.appendChild(tiles);
 
       var note = "The buyback equals the sale price. The contract refuses any listing where it is " +
@@ -515,17 +543,40 @@
       }
     }
 
+    /** A duration typed in days or hours, returned in seconds. BigInt(NaN) throws a RangeError
+        whose text is about JavaScript, so anything that is not a plain number is refused here. */
+    function span(key, label, seconds) {
+      var raw = inputs[key].value.trim();
+      if (!/^\d+(\.\d+)?$/.test(raw)) {
+        throw new Error("The " + label + " has to be a number" + (raw ? ", not " + raw : "") + ".");
+      }
+      return BigInt(Math.round(Number(raw) * seconds));
+    }
+
+    function whole(key, label) {
+      var raw = inputs[key].value.trim();
+      if (!/^\d+$/.test(raw)) {
+        throw new Error("The " + label + " has to be a whole number" + (raw ? ", not " + raw : "") + ".");
+      }
+      return BigInt(raw);
+    }
+
     function read() {
+      var builder = inputs.builder.value.trim();
+      if (!/^0x[0-9a-fA-F]{40}$/.test(builder)) {
+        throw new Error("The builder is an address: forty hex characters after 0x, or the zero " +
+                        "address for nobody.");
+      }
       var t = {
         price: amount("price", "sale price"),
         rent: amount("rent", "rent"),
         buybackPrice: amount("buyback", "buyback"),
-        term: BigInt(Math.round(Number(inputs.termDays.value) * 86400)),
-        grace: BigInt(Math.round(Number(inputs.graceHours.value) * 3600)),
-        listingDuration: BigInt(Math.round(Number(inputs.listingDays.value) * 86400)),
-        maxFrozenBps: BigInt(inputs.maxFrozenBps.value.trim()),
-        freezeProbe: BigInt(inputs.freezeProbe.value.trim()),
-        builder: inputs.builder.value.trim(),
+        term: span("termDays", "term", 86400),
+        grace: span("graceHours", "grace window", 3600),
+        listingDuration: span("listingDays", "offer duration", 86400),
+        maxFrozenBps: whole("maxFrozenBps", "frozen-time ceiling"),
+        freezeProbe: whole("freezeProbe", "freeze probe"),
+        builder: builder,
         builderFee: amount("builderFee", "builder fee")
       };
       var bad = null;
@@ -538,6 +589,7 @@
       else if (t.maxFrozenBps > 5000n) bad = "At most half a term can be credited as frozen: 5000 bps.";
       else if (t.freezeProbe > 1n) bad = "The freeze probe is 0 or 1.";
       else if (t.builderFee > t.price / 100n) bad = "A builder fee is at most a hundredth of the sale price.";
+      else if (t.builderFee > 0n && /^0x0{40}$/i.test(t.builder)) bad = "A builder fee needs a builder to be paid to.";
       return { t: t, bad: bad };
     }
 
@@ -571,11 +623,21 @@
       var fields = window.TENURE_ABI.struct.Terms.map(function (f) { return parsed.t[f[0]]; });
       var cd = Eth.calldata("list(uint256,(uint128,uint128,uint128,uint32,uint32,uint32,uint16,uint8,address,uint128))",
                             [d.tokenId, fields]);
-      await act(go, "listing…", CFG.vault, cd, async function () {
-        var n = await vault("dealCount()");
-        say("Listed as deal " + n + ". It is on the market until somebody funds it or the offer expires.", "ok");
-        go.disabled = true;
-      });
+      // act() re-enables its button when it finishes, which left a live "List" button under a
+      // position that had already gone into the vault. The panel is replaced instead.
+      var listedAs = null;
+      await act(go, "listing…", CFG.vault, cd, async function () { listedAs = await vault("dealCount()"); });
+      if (listedAs === null) return;
+      p.textContent = "";
+      p.appendChild(el("h2", null, "Offered"));
+      p.appendChild(el("p", "note", "Listed as deal " + listedAs + ". It stays on the market until " +
+        "somebody funds it or the offer expires, and you can cancel it until then."));
+      var next = el("div", "bar");
+      next.style.margin = "16px 0 0";
+      var see = el("button", "primary small", "See it on the market");
+      see.addEventListener("click", function () { location.hash = "#market"; });
+      next.appendChild(see);
+      p.appendChild(next);
     });
 
     why.textContent = "Listing hands the position to the vault. You keep collecting its fees for " +
@@ -767,7 +829,7 @@
           }
           var have = await usdgBalance(Wallet.state.account);
           if (have < d.price) {
-            return say("Funding this needs " + money2(d.price) + " and you hold " + usdg(have) + ".", "err");
+            return say("Funding this needs " + money2(d.price) + " and you hold " + money2(have) + ".", "err");
           }
           if (!(await ensureUsdgAllowance(b, d.price))) return;
           await act(b, "funding…", CFG.vault, Eth.calldata("fund(uint256)", [d.id]), refresh);
@@ -791,7 +853,7 @@
         button("Buy it back · " + money2(d.buybackPrice), "primary", async function (b) {
           var have = await usdgBalance(Wallet.state.account);
           if (have < d.buybackPrice) {
-            return say("Buying it back needs " + money2(d.buybackPrice) + " and you hold " + usdg(have) + ".", "err");
+            return say("Buying it back needs " + money2(d.buybackPrice) + " and you hold " + money2(have) + ".", "err");
           }
           if (!(await ensureUsdgAllowance(b, d.buybackPrice))) return;
           await act(b, "buying back…", CFG.vault, Eth.calldata("buyBack(uint256)", [d.id]), refresh);
@@ -909,7 +971,7 @@
     // A wallet sitting on a chain this page is configured for is not a mismatch, it is a choice.
     // Follow it rather than telling somebody their own network is wrong.
     if (s.account && s.chainId && s.chainId !== CFG.chain.id && window.TENURE.chains[String(s.chainId)]
-        && !params.get("chain")) {
+        && !pinned) {
       return switchTo(s.chainId);
     }
     if (!s.account) {
@@ -975,7 +1037,7 @@
     paintWallet(Wallet.state);
   }
 
-  $("chain").addEventListener("change", function () { switchTo(Number(this.value)); });
+  $("chain").addEventListener("change", function () { pinned = true; switchTo(Number(this.value)); });
   $("connect").addEventListener("click", doConnect);
   $("lookup").addEventListener("click", lookup);
   $("tokenId").addEventListener("keydown", function (e) { if (e.key === "Enter") lookup(); });
