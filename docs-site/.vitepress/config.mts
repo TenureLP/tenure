@@ -32,6 +32,7 @@ export default defineConfig({
       { text: "Guide", link: "/guide/how-a-deal-works" },
       { text: "Contracts", link: "/contracts/lease-vault" },
       { text: "API", link: "/api/" },
+      { text: "Positions", link: "/guide/positions" },
       { text: "Agents", link: "/api/agents" },
       { text: "Testnet", link: "/guide/testnet" },
       {
@@ -56,6 +57,7 @@ export default defineConfig({
       {
         text: "Guides",
         items: [
+          { text: "Your positions", link: "/guide/positions" },
           { text: "Selling a position", link: "/guide/sellers" },
           { text: "Funding a deal", link: "/guide/financiers" },
           { text: "Builder codes", link: "/guide/builders" },

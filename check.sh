@@ -39,8 +39,10 @@ documented = set(doc["paths"])
 served_fixed = set(server._SPEC_FILES) | {"/health"}
 templated = {p for p in documented if "{" in p}
 assert templated, "no position route documented"
+routes = (server._ROUTE, server._OWNER_ROUTE)
 for path in templated:
-    assert server._ROUTE.match(path.replace("{tokenId}", "2908254")), "documented, not served: %s" % path
+    concrete = path.replace("{tokenId}", "2908254").replace("{address}", "0x" + "ab" * 20)
+    assert any(r.match(concrete) for r in routes), "documented, not served: %s" % path
 
 flat = {p for p in documented if "{" not in p}
 # /openapi.yml is served as an alias and deliberately not documented twice.

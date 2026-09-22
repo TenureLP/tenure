@@ -15,6 +15,7 @@ library only.
 | `GET /health` | status, always free |
 | `GET /v1/position/{tokenId}` | the valuation |
 | `GET /v1/position/{tokenId}/quote` | the valuation plus indicative terms. See [quotes](/api/quotes) |
+| `GET /v1/owner/{address}/positions` | every position a wallet holds, valued and diagnosed. See [your positions](/guide/positions) |
 | `GET /openapi.yaml`, `/openapi.json` | the OpenAPI 3.1 description, served by the running build |
 
 ```bash
@@ -44,6 +45,25 @@ curl https://api-production-9e87.up.railway.app/v1/position/3093793
 
 The window only ever shrinks, never grows: answering over more history than was asked for would
 answer a different question.
+
+## A whole wallet
+
+```bash
+curl https://api-production-9e87.up.railway.app/v1/owner/0x1283b0ee815f1066dd0eb435b4999aa2ae0ea1d1/positions
+```
+
+It rebuilds the wallet's positions from the PositionManager's transfer history, keeps the ones it
+still holds, and values up to 40 of them.
+
+| Field | What it is |
+|---|---|
+| `summary` | counts, total value, fees waiting, fees per day, and how many need a look |
+| `summary.complete` | false when the wallet has received more positions than can be listed at once |
+| `positions[].pool.hooks` | the hook's address, its permissions read from that address, and what they allow |
+| `positions[].earning` | fees per day and APR over the window, with their source |
+| `positions[].lease` | indicative Tenure terms, or why the vault would refuse the listing |
+| `positions[].findings` | facts, most pressing first, each with the options it opens |
+| `truncated`, `unreadable` | held but not valued here, and what the node would not answer for |
 
 ## Known limits
 

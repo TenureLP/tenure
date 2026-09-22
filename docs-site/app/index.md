@@ -3,7 +3,7 @@
 [app-production-7810.up.railway.app](https://app-production-7810.up.railway.app) is the deal flow as a
 single page: three screens, one wallet button, nothing to install.
 
-## The three screens
+## The screens
 
 <figure class="shot">
   <div class="bar"><i></i><i></i><i></i></div>
@@ -18,6 +18,9 @@ it from the same screen.
 
 **Market.** Every open listing, with the pair, the sale price, the buyback, the rent and the rent on
 price per term and per year. Fund one from here.
+
+**Positions.** Every Uniswap v4 position a wallet holds, with what each one earns and what can be
+done about it. Any address can be looked up; see [your positions](/guide/positions).
 
 **You.** Every deal you are a party to, on either side, and whatever the vault holds for you: USDG to
 withdraw, and positions to withdraw. The actions for each deal sit on its card: collect the fees, buy

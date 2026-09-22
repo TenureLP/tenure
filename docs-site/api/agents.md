@@ -45,12 +45,19 @@ services without a wallet prompt per call:
 3. **Ask.** The agent calls `search_services` to find Tenure position valuation, then
    `request_paid_api` to pay for it and read the answer.
 
-A prompt as plain as this is enough:
+An agent can ask about one position or about a whole wallet:
 
 ```
-Value Uniswap v4 position 3093793 on Robinhood Chain with Tenure,
-and tell me what it could raise on a 7-day lease.
+Value Uniswap v4 position 3093793 on Robinhood Chain with Tenure.
 ```
+
+```
+Check every position 0x1283…a1d1 holds: which are out of range, what fees are waiting,
+and what any of them could raise on a lease.
+```
+
+The second is `GET /v1/owner/{address}/positions`, which answers with the wallet's positions, what
+each earns, what its pool's hook may do, and a list of findings. See [your positions](/guide/positions).
 
 ::: tip Read their documentation, not ours
 The MCP is Olanas's software, not Tenure's. Its install command, its session limits and its
