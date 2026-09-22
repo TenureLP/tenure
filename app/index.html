@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tenure · App</title>
 <meta name="description" content="Value a Uniswap v4 position, see what a wallet holds, offer a position for sale-and-leaseback, or fund one.">
-<meta name="theme-color" content="#070C15">
+<meta name="theme-color" content="#EFE9DD">
 <link rel="icon" type="image/svg+xml" href="assets/logo-mark-small.svg">
+<script src="theme.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Both looks' faces. A browser only downloads the ones the page in front of it uses. -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/app.css">
 </head>
 <body>
@@ -47,29 +49,36 @@
 </div>
 
 <header class="top">
-  <div class="wrap">
+  <div class="wrap masthead">
     <a class="logo" href="https://landing-production-abe1.up.railway.app" aria-label="Tenure home">
-      <img src="assets/logo-mark-small.svg" alt=""><span>Tenure</span>
+      <svg class="mark" viewBox="0 0 512 512" aria-hidden="true">
+        <path class="curve" d="M147 338C201.5 338 190.6 196 256 196S310.5 338 365 338" fill="none" stroke-width="46" stroke-linecap="round"/>
+        <rect class="post" x="70" y="112" width="44" height="288" rx="22"/>
+        <rect class="post" x="398" y="112" width="44" height="288" rx="22"/>
+      </svg><span>Tenure</span>
     </a>
     <nav class="tabs" aria-label="Screens">
-      <button class="tab" type="button" data-go="value">Value</button>
-      <button class="tab" type="button" data-go="positions">Positions</button>
-      <button class="tab" type="button" data-go="market">Market</button>
-      <button class="tab" type="button" data-go="you">You</button>
+      <button class="tab" type="button" data-go="value"><b>01</b><span>Value</span></button>
+      <button class="tab" type="button" data-go="positions"><b>02</b><span>Positions</span></button>
+      <button class="tab" type="button" data-go="market"><b>03</b><span>Market</span></button>
+      <button class="tab" type="button" data-go="you"><b>04</b><span>You</span></button>
     </nav>
     <div class="tools">
       <select class="chain hidden" id="chain" aria-label="Chain"></select>
       <button class="net hidden" id="net" type="button"></button>
+      <button class="mode" id="theme" type="button"><i aria-hidden="true"></i><span class="to-night">Night</span><span class="to-paper">Paper</span></button>
       <button class="ghost small wallet" id="connect" type="button">Connect wallet</button>
     </div>
   </div>
+  <div class="wrap"><div class="rule2"></div></div>
 </header>
 
 <main class="wrap">
 
   <!-- ------------------------------------------------------------ value -->
   <section data-view="value">
-    <h1>Value a position.</h1>
+    <p class="eyebrow">No. 01 — Valuation, read from the chain</p>
+    <h1>What is it <em>worth?</em></h1>
     <p class="lede">Paste the id of a Uniswap v4 position and see what it holds, what its range has
       actually earned, and the terms it could be offered on. Nothing is signed here.</p>
 
@@ -94,11 +103,12 @@
 
   <!-- ------------------------------------------------------------ positions -->
   <section data-view="positions" class="hidden">
-    <h1>Your positions.</h1>
-    <p class="lede">Every Uniswap v4 position a wallet holds on Robinhood Chain: what each one holds,
-      what it earns, what its pool's hook may do, and what can be done about it. Read from the chain,
-      nothing signed.</p>
-    <div class="pf-tools">
+    <p class="eyebrow">No. 02 — Register of positions</p>
+    <h1>What you hold, <em>and what it earns.</em></h1>
+    <p class="lede">Every Uniswap v4 position a wallet holds on Robinhood Chain: where its price
+      sits, what it earns, what its pool's hook may do, and what can be done about it. Read from the
+      chain, nothing signed.</p>
+    <div class="bar">
       <input id="pf-owner" type="text" inputmode="text" autocomplete="off" spellcheck="false"
              placeholder="Your connected wallet, or paste any address" aria-label="Wallet address">
       <button class="ghost" id="pf-go" type="button"><svg class="ico"><use href="#i-search"/></svg> Look up</button>
@@ -108,7 +118,8 @@
 
   <!-- ------------------------------------------------------------ market -->
   <section data-view="market" class="hidden">
-    <h1>Open listings.</h1>
+    <p class="eyebrow">No. 03 — Open offers</p>
+    <h1>On offer, <em>on written terms.</em></h1>
     <p class="lede">Positions offered for sale-and-leaseback, on terms their owner wrote. Funding one
       buys the position at the listed price and leases it straight back on exactly these terms.</p>
     <div id="market"></div>
@@ -116,9 +127,10 @@
 
   <!-- ------------------------------------------------------------ you -->
   <section data-view="you" class="hidden">
-    <h1>Your deals.</h1>
+    <p class="eyebrow">No. 04 — Your deals</p>
+    <h1>Written down <em>before it started.</em></h1>
     <p class="lede">Everything you are a party to, on either side, and anything the vault is holding
-      for you.</p>
+      for you. Every figure below was fixed when the deal was made, and none of them can move.</p>
     <div id="you"></div>
   </section>
 

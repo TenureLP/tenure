@@ -4,13 +4,14 @@ The deal flow, as a page. No framework, no build step, no dependency: the same r
 and the services follow, and for the same reason.
 
 ```
-index.html      the page, styles included
+index.html      the page
+theme.js        which look it wears, Paper or Night, chosen before the first paint
 config.js       what it talks to: chain, API, token addresses, vault
 abi.js          generated from the compiled contract; never edited by hand
 eth.js          ABI coder and JSON-RPC, written out
 wallet.js       the wallet, and the only place a transaction is sent from
-app.js          the three screens
-assets/         the mark
+app.js          the four screens
+assets/         the stylesheet, both looks in one file, and the mark
 dev_server.py   local preview, standard library only
 devchain.sh     a forked chain with the vault on it, to use the page against
 make-abi-js.py  regenerates abi.js

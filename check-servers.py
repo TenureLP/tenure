@@ -57,11 +57,12 @@ def app():
     def status(path, method="GET"):
         try:
             with urllib.request.urlopen(urllib.request.Request(base + path, method=method)) as r:
+                r.read()  # read to the end, or the server logs a broken pipe for every file
                 return r.status, r.headers
         except urllib.error.HTTPError as e:
             return e.code, e.headers
 
-    for path in ("/", "/index.html", "/app.js", "/config.js", "/assets/logo-mark-small.svg"):
+    for path in ("/", "/index.html", "/app.js", "/theme.js", "/config.js", "/assets/app.css", "/assets/logo-mark-small.svg"):
         code, headers = status(path)
         assert code == 200, (path, code)
     code, headers = status("/")

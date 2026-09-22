@@ -152,26 +152,354 @@
   }
 
   /** The shape of the answer, drawn before it arrives, so nothing jumps when it does. `text` is
-      what a screen reader is told; sighted readers get the shape. */
+      what a screen reader is told, and printed small above the shape for everybody else. */
   function loading(text, figs) {
-    var p = el("div", "panel");
+    var p = el("div", "sk-sheet");
     p.setAttribute("aria-busy", "true");
     p.setAttribute("aria-label", text);
-    var card = el("div", "sk-card");
-    card.appendChild(el("div", "sk h w40"));
+    p.appendChild(el("p", "caption", text + "…"));
+    p.appendChild(el("div", "sk h w40"));
     var grid = el("div", "sk-figs");
     for (var i = 0; i < (figs || 4); i++) {
       var col = el("div");
       col.appendChild(el("div", "sk w60"));
-      var v = el("div", "sk t");
-      v.style.marginTop = "8px";
-      col.appendChild(v);
+      col.appendChild(el("div", "sk t"));
       grid.appendChild(col);
     }
-    card.appendChild(grid);
-    card.appendChild(el("div", "sk w25"));
-    p.appendChild(card);
+    p.appendChild(grid);
+    p.appendChild(el("div", "sk w25"));
     return p;
+  }
+
+  // ------------------------------------------------------------------ the parts of a sheet
+
+  var SVG = "http://www.w3.org/2000/svg";
+
+  function svgEl(tag, attrs) {
+    var e = document.createElementNS(SVG, tag);
+    Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+    return e;
+  }
+
+  /** A document on the page: a band of references across the top, then a body to write in.
+      Both looks draw from this; the corner marks only show at night. */
+  function sheet(band, right) {
+    var s = el("article", "sheet");
+    ["tl", "tr", "bl", "br"].forEach(function (c) { s.appendChild(el("i", "reg " + c)); });
+    var b = el("div", "band");
+    band.filter(Boolean).forEach(function (x) { b.appendChild(typeof x === "string" ? el("span", null, x) : x); });
+    if (right) {
+      var r = typeof right === "string" ? el("span", null, right) : right;
+      r.classList.add("r");
+      b.appendChild(r);
+    }
+    s.appendChild(b);
+    var body = el("div", "body");
+    s.appendChild(body);
+    return { node: s, body: body, band: b };
+  }
+
+  /** "Position No. 3093793", with the number set apart from its label. */
+  function ref(label, value) {
+    var s = el("span", null, label + " ");
+    s.appendChild(el("b", null, String(value)));
+    return s;
+  }
+
+  /** "ETH / USDG" with the stroke between them set back. */
+  function pairHeading(a, b) {
+    var h = el("h2", null, a + " ");
+    h.appendChild(el("span", null, "/"));
+    h.appendChild(document.createTextNode(" " + b));
+    return h;
+  }
+
+  /** A sheet's heading, the line under it, and its stamps: [kind, text] each, kind being one of
+      "", "bad", "wait", "flat". */
+  function titleBlock(parent, heading, sub, stamps) {
+    var t = el("div", "title");
+    var left = el("div");
+    left.appendChild(typeof heading === "string" ? el("h2", null, heading) : heading);
+    if (sub) left.appendChild(el("p", "sub", sub));
+    t.appendChild(left);
+    if (stamps && stamps.length) {
+      var st = el("div", "stamps");
+      stamps.forEach(function (s) { st.appendChild(el("span", "stamp " + (s[0] || ""), s[1])); });
+      t.appendChild(st);
+    }
+    parent.appendChild(t);
+    return t;
+  }
+
+  /** One small figure inside a sheet: a label, the number, its unit, and a line under it. */
+  function fig(parent, k, v, unit, accent, sub) {
+    var f = el("div", "fig" + (accent ? " am" : ""));
+    f.appendChild(el("p", "k", k));
+    var val = el("p", "v");
+    val.appendChild(el("span", "n", v));
+    if (unit && v !== "—") val.appendChild(el("small", null, unit));
+    f.appendChild(val);
+    if (sub) f.appendChild(el("p", "u", sub));
+    parent.appendChild(f);
+  }
+
+  /** A quantity of a token for reading: "0.9043", "6,625.00". The chain's eighteen places are
+      what it stores, not what anybody reads. */
+  function fmtAmount(x) {
+    var n = Number(x);
+    if (!isFinite(n)) return String(x);
+    if (n === 0) return "0";
+    return fmtPrice(n);
+  }
+
+  /** What the chain says about a position, numbered in the margin. */
+  function remarks(findings) {
+    var r = el("div", "remarks");
+    r.appendChild(el("h4", null, "Remarks"));
+    var ol = el("ol");
+    findings.forEach(function (f, i) {
+      var li = el("li", f.level);
+      li.appendChild(el("i", null, String(i + 1)));
+      var body = el("div");
+      body.appendChild(el("b", null, sentence(f.title)));
+      if (f.detail) body.appendChild(el("span", null, f.detail));
+      li.appendChild(body);
+      ol.appendChild(li);
+    });
+    r.appendChild(ol);
+    return r;
+  }
+
+  /** A price for reading. Pools quote anything from a few billionths to millions, so the number of
+      places follows the size of the number rather than a fixed two. */
+  function fmtPrice(x) {
+    var n = Number(x);
+    if (!isFinite(n) || n <= 0) return null;
+    if (n >= 1e12) return n.toExponential(3);
+    if (n >= 1000) return fmt(n);
+    if (n >= 1) return n.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+    if (n >= 1e-6) return n.toPrecision(4);
+    return n.toExponential(3);
+  }
+
+  /** How far the price of token0 must move, in percent, to go from one tick to another. */
+  function moveTo(fromTick, toTick) { return (Math.pow(1.0001, toTick - fromTick) - 1) * 100; }
+
+  /** A price move for reading. Past a tenfold rise a percentage stops meaning anything and the
+      move is a multiple; a fall can never pass a hundred percent, only approach it. */
+  function pctText(x) {
+    if (x >= 900) return "×" + fmtPrice(1 + x / 100);
+    var a = Math.abs(x);
+    var s = a < 1 ? a.toFixed(2) : a < 100 ? a.toFixed(1) : String(Math.round(a));
+    if (x < 0 && a > 99.99) s = "99.99";
+    return (x < 0 ? "−" : "+") + s + " %";
+  }
+
+  /** A range so wide it covers every price anybody will see. Said in words: its bounds printed as
+      prices are numbers with fifty digits. */
+  function everyPrice(tl, tu) { return tu - tl >= 400000; }
+
+  /** "Earns between 2,675.81 and 2,785.01 USDG per ETH." */
+  function rangeSentence(pos, s0, s1) {
+    if (pos.tickLower == null) return null;
+    if (everyPrice(pos.tickLower, pos.tickUpper)) {
+      return "Earns at almost any price: ticks " + pos.tickLower + " to " + pos.tickUpper + ".";
+    }
+    if (pos.priceLower == null || pos.priceUpper == null) return null;
+    return "Earns between " + fmtPrice(pos.priceLower) + " and " + fmtPrice(pos.priceUpper) + " " + s1 + " per " + s0 + ".";
+  }
+
+  /** The range drawn on the price line: the parcel between its two posts, the price as a pin, and
+      the distance to each post. Everything is a percentage of the width, so it is the same drawing
+      on a phone. The window is the range with a third of its width either side, widened to take
+      the price in when the price has left it. */
+  function survey(o) {
+    var tl = o.tl, tu = o.tu, tick = o.tick;
+    var width = Math.max(1, tu - tl), lo = tl - width * 0.35, hi = tu + width * 0.35;
+    if (tick < lo) lo = tick - width * 0.12;
+    if (tick > hi) hi = tick + width * 0.12;
+    var x = function (t) { return Math.max(0, Math.min(100, (t - lo) / (hi - lo) * 100)); };
+    var inside = tick >= tl && tick < tu;
+    var priced = o.lower != null && o.upper != null && o.now != null;
+    var bounded = priced && !everyPrice(tl, tu);
+    var lowerT = bounded ? fmtPrice(o.lower) : "tick " + tl;
+    var upperT = bounded ? fmtPrice(o.upper) : "tick " + tu;
+    var nowT = priced ? o.base + " " + fmtPrice(o.now) : "tick " + tick;
+
+    var s = el("div", "survey" + (inside ? "" : " out"));
+    s.setAttribute("role", "img");
+    s.setAttribute("aria-label", "Range " + lowerT + " to " + upperT + (priced ? " " + o.quote + " per " + o.base : "") +
+      ". Price " + nowT + ", " + (inside ? "inside the range." : "outside it."));
+    s.appendChild(el("span", "cap", priced ? "Price of " + o.base + ", in " + o.quote : "Range, in ticks"));
+    s.appendChild(el("div", "ruler"));
+
+    var parcel = el("div", "parcel");
+    parcel.style.left = x(tl) + "%";
+    parcel.style.width = (x(tu) - x(tl)) + "%";
+    s.appendChild(parcel);
+    [tl, tu].forEach(function (t) {
+      var p = el("div", "post");
+      p.style.left = x(t) + "%";
+      s.appendChild(p);
+    });
+
+    var at = el("div", "at" + (x(tick) > 62 ? " flip" : ""));
+    at.style.left = x(tick) + "%";
+    at.appendChild(el("span", null, nowT));
+    s.appendChild(at);
+
+    function label(pos, text) {
+      var l = el("span", "lab" + (pos < 8 ? " l" : pos > 92 ? " r" : ""), text);
+      l.style.left = pos + "%";
+      s.appendChild(l);
+    }
+    // Two labels need room; a range squeezed small by a price far away gets one.
+    if (x(tu) - x(tl) >= 24) {
+      label(x(tl), lowerT);
+      label(x(tu), upperT);
+    } else {
+      label((x(tl) + x(tu)) / 2, lowerT + " – " + upperT);
+    }
+
+    // The words after the figure go first when the margin is narrow; the figure stays.
+    function dim(a, b, text, warn, more) {
+      var d = el("div", "dim" + (warn ? " warn" : ""));
+      d.style.left = a + "%";
+      d.style.width = Math.max(0, b - a) + "%";
+      var t = el("span", null, text);
+      if (more) t.appendChild(el("i", "more", more));
+      d.appendChild(t);
+      s.appendChild(d);
+    }
+    if (inside) {
+      var down = moveTo(tick, tl), up = moveTo(tick, tu);
+      var nearUp = Math.abs(up) <= Math.abs(down);
+      dim(x(tl), x(tick), pctText(down), !nearUp);
+      dim(x(tick), x(tu), pctText(up), nearUp, nearUp ? " to the edge" : null);
+    } else if (tick < tl) {
+      dim(x(tick), x(tl), pctText(moveTo(tick, tl)), true, " to come back");
+    } else {
+      dim(x(tu), x(tick), pctText(moveTo(tick, tu)), true, " to come back");
+    }
+    return s;
+  }
+
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  /** "29 Sep, 18:40 UTC". In UTC because that is the only clock the vault and every reader share. */
+  function dateOf(unixSeconds) {
+    var d = new Date(Number(unixSeconds) * 1000);
+    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+    return d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + ", " + pad(d.getUTCHours()) + ":" +
+      pad(d.getUTCMinutes()) + " UTC";
+  }
+
+  /** A funded lease to scale: the term, then the grace window, what has already passed filled in,
+      and a pin for now, read against the chain's clock. */
+  function termLine(d) {
+    var start = Number(d.fundedAt), end = start + Number(d.term), close = end + Number(d.grace);
+    var nowAt = Math.max(0, Math.min(100, (chainNow - start) / (close - start) * 100));
+    var wrap = el("div");
+    var line = el("div", "term-line");
+    line.setAttribute("role", "img");
+    line.setAttribute("aria-label", "Lease from " + dateOf(start) + " to " + dateOf(end) +
+      ", then a buy-back window until " + dateOf(close) + ".");
+    var lease = el("div", "seg lease");
+    lease.style.flexGrow = String(Number(d.term));
+    lease.style.setProperty("--days", String(Math.max(1, Math.min(30, Math.round(Number(d.term) / 86400)))));
+    var grace = el("div", "seg grace");
+    grace.style.flexGrow = String(Number(d.grace));
+    var done = el("div", "done");
+    done.style.width = nowAt + "%";
+    var pin = el("div", "now" + (nowAt < 4 ? " l" : nowAt > 96 ? " r" : ""));
+    pin.style.left = nowAt + "%";
+    pin.appendChild(el("span", null, "now"));
+    [lease, grace, done, pin].forEach(function (n) { line.appendChild(n); });
+    wrap.appendChild(line);
+
+    var legend = el("div", "legend");
+    [["Signed", start, false], ["Lease ends", end, true], ["Buy-back window closes", close, true]].forEach(function (x) {
+      var item = el("div");
+      item.appendChild(el("b", null, x[0]));
+      item.appendChild(el("span", null, dateOf(x[1])));
+      if (x[2]) item.appendChild(el("em", null, when(x[1])));
+      legend.appendChild(item);
+    });
+    wrap.appendChild(legend);
+    return wrap;
+  }
+
+  /** The deal in one sentence, its figures written into blanks. Parts are text, nodes, or
+      { f: "text", hl: true } for a blank; hl marks the one figure the reader came for. */
+  function contract(parts) {
+    var p = el("p", "contract");
+    parts.forEach(function (x) {
+      if (typeof x === "string") p.appendChild(document.createTextNode(x));
+      else if (x.nodeType) p.appendChild(x);
+      else p.appendChild(el("span", "f" + (x.hl ? " hl" : ""), x.f));
+    });
+    return p;
+  }
+
+  /** An address inside a sentence. */
+  function who(a) {
+    var s = el("span", "who");
+    s.appendChild(addr(a));
+    return s;
+  }
+
+  /** What the vault will never do, pressed into every lease it holds. Each seal carries its own
+      ring for the text to run along, because an id is only good once in a page. */
+  var seals = 0;
+  function seal() {
+    var id = "seal-ring-" + (++seals);
+    var s = svgEl("svg", { "class": "seal", viewBox: "0 0 150 150", "aria-hidden": "true" });
+    var defs = svgEl("defs");
+    defs.appendChild(svgEl("path", { id: id, d: "M75 75m-57 0a57 57 0 1 1 114 0a57 57 0 1 1-114 0" }));
+    s.appendChild(defs);
+    s.appendChild(svgEl("circle", { cx: "75", cy: "75", r: "71", "stroke-width": "1.5" }));
+    s.appendChild(svgEl("circle", { cx: "75", cy: "75", r: "44", "stroke-width": "1" }));
+    var text = svgEl("text");
+    var path = svgEl("textPath", { href: "#" + id });
+    path.textContent = "NO ORACLE · NO OWNER · NO FEE · NO DEBT ·";
+    text.appendChild(path);
+    s.appendChild(text);
+    var g = svgEl("g", { transform: "translate(51 51) scale(.094)" });
+    g.appendChild(svgEl("path", { "class": "curve", d: "M147 338C201.5 338 190.6 196 256 196S310.5 338 365 338",
+                                  fill: "none", "stroke-width": "46", "stroke-linecap": "round" }));
+    g.appendChild(svgEl("rect", { "class": "post", x: "70", y: "112", width: "44", height: "288", rx: "22" }));
+    g.appendChild(svgEl("rect", { "class": "post", x: "398", y: "112", width: "44", height: "288", rx: "22" }));
+    s.appendChild(g);
+    return s;
+  }
+
+  /** The two signature lines of a deal, and the seal beside them. */
+  function parties(d, me) {
+    var p = el("div", "parties");
+    function line(label, a, open) {
+      var box = el("div", "party");
+      box.appendChild(el("p", "k", label));
+      var v = el("p", "v");
+      if (open) v.textContent = open;
+      else {
+        v.appendChild(addr(a));
+        if (same(a, me)) v.appendChild(el("em", null, "you"));
+      }
+      box.appendChild(v);
+      p.appendChild(box);
+    }
+    line("Lessee", d.seller);
+    var funded = d.financier && !/^0x0{40}$/i.test(d.financier);
+    line("Financier", d.financier, funded ? null : "open to anyone");
+    p.appendChild(seal());
+    return p;
+  }
+
+  /** The pool's swap fee, or the fact that its hook sets one. */
+  function feeLabel(pips, dynamic) {
+    if (dynamic) return "Dynamic fee";
+    var n = Number(pips);
+    return isFinite(n) ? (n / 10000).toFixed(n % 100 ? 3 : 2).replace(/0+$/, "").replace(/\.$/, "") + " % fee" : null;
   }
 
   /** The token a pool is quoted in, read from the token itself. A symbol is whatever the token's
@@ -253,19 +581,16 @@
     return r;
   }
 
-  function tile(parent, k, v, u, accent) {
+  /** A headline figure on a ledger line: label, number, unit beside it, a line of context under. */
+  function tile(parent, k, v, unit, sub, accent) {
     var t = el("div", "tile" + (accent ? " am" : ""));
-    t.appendChild(el("div", "k", k));
-    t.appendChild(el("div", "v", v));
-    if (u) t.appendChild(el("div", "u", u));
+    t.appendChild(el("p", "k", k));
+    var val = el("p", "v");
+    val.appendChild(el("span", "n", v));
+    if (unit && v !== "—") val.appendChild(el("small", null, unit));
+    t.appendChild(val);
+    if (sub) t.appendChild(el("p", "u", sub));
     parent.appendChild(t);
-  }
-
-  function term(parent, k, v) {
-    var d = el("div");
-    d.appendChild(el("div", "k", k));
-    d.appendChild(el("div", "v", v));
-    parent.appendChild(d);
   }
 
   /** A figure fit to print, or null. Beyond about a quadrillion USDG nothing is a quantity of
@@ -448,8 +773,8 @@
     var out = $("result");
     out.textContent = "";
 
-    var p = el("div", "panel");
-    p.appendChild(el("h2", null, "Position " + tokenId));
+    var sh = sheet([ref("Position No.", tokenId), CFG.chain.name], "Not priced here");
+    titleBlock(sh.body, "Position " + tokenId, "Held by " + short(owner) + ".");
     var rows = el("div", "rows");
     rowNode(rows, "Held by", addr(owner));
     if (CFG.usdg) {
@@ -460,12 +785,14 @@
     } else {
       row(rows, "Settlement token", "none configured");
     }
-    p.appendChild(rows);
-    p.appendChild(el("p", "note", "There is no valuation service on " + CFG.chain.name + ": it " +
+    sh.body.appendChild(rows);
+    var n = el("p", "note", "There is no valuation service on " + CFG.chain.name + ": it " +
       "prices positions in USDG by reading USDG pools, and this chain has none. What it holds and " +
       "what it earns are still on the chain; the terms below are yours to write, and the vault " +
-      "refuses a listing it cannot settle."));
-    out.appendChild(p);
+      "refuses a listing it cannot settle.");
+    n.style.marginTop = "18px";
+    sh.body.appendChild(n);
+    out.appendChild(sh.node);
 
     out.appendChild(listingPanel({ tokenId: tokenId, quote: null }));
   }
@@ -474,38 +801,42 @@
     var out = $("result");
     out.textContent = "";
 
-    var pool = d.pool || {}, pos = d.position || {}, value = d.valueUSDG;
+    var pool = d.pool || {}, pos = d.position || {}, value = d.valueUSDG, price = d.price || {};
     var rate = d.feeRate || {}, quote = d.quote || {};
+    var s0 = (pool.token0 && pool.token0.symbol) || "token0", s1 = (pool.token1 && pool.token1.symbol) || "token1";
+    var readable = rate.available && rate.plausible !== false && money(rate.feesPerDayUSDG) !== null;
+    var hooked = pool.hooks && !/^0x0{40}$/i.test(pool.hooks);
 
     // ---- the position
-    var p1 = el("div", "panel");
-    p1.appendChild(el("h2", null, "Position " + d.tokenId));
-
-    var pills = el("div", "bar");
-    pills.style.marginBottom = "16px";
+    var sh = sheet([ref("Position No.", d.tokenId), s0 + " · " + s1,
+                    feeLabel(pool.keyFeePips, pool.keyFeePips === 8388608)],
+                   hooked ? "Hook attached" : "No hook");
     // An emptied position is still "in range": its interval contains the price, it just holds
-    // nothing. A green badge on that says the opposite of what matters.
+    // nothing. A green stamp on that says the opposite of what matters.
     var empty = pos.liquidity === "0";
-    var st = empty ? ["no", "empty"] : pos.inRange ? ["ok", "in range"] : ["no", "out of range"];
-    pills.appendChild(el("span", "pill " + st[0], st[1]));
-    if (pos.hasSubscriber) pills.appendChild(el("span", "pill no", "has a subscriber"));
-    p1.appendChild(pills);
+    var stamps = [empty ? ["flat", "Empty"] : pos.inRange ? ["", "In range"] : ["bad", "Out of range"]];
+    if (pos.hasSubscriber) stamps.push(["bad", "Subscriber"]);
+    var between = rangeSentence(pos, s0, s1);
+    if (between && price.token0InToken1 != null) between += " The price is " + fmtPrice(price.token0InToken1) + ".";
+    titleBlock(sh.body, pairHeading(s0, s1), between, stamps);
 
     // The three figures somebody opened this screen for, before the detail they can check after.
     if (value) {
       var head = el("div", "tiles");
-      tile(head, "MARKET VALUE", fmt(value.total) || "—", tok(), true);
-      tile(head, "FEES PER DAY", rate.available && rate.plausible !== false && money(rate.feesPerDayUSDG) !== null
-        ? fmt(rate.feesPerDayUSDG) : "—", tok());
-      tile(head, "FEE APR", rate.available && rate.plausible !== false && money(rate.feeAprPercent) !== null
-        ? fmt(rate.feeAprPercent) + " %" : "—", "last " + duration(rate.windowSeconds || 86400));
-      head.style.marginTop = "0";
-      head.style.marginBottom = "18px";
-      p1.appendChild(head);
+      tile(head, "Market value", fmt(value.total) || "—", tok(), "held and fees, at the pool's price", true);
+      tile(head, "Fees per day", readable ? fmt(rate.feesPerDayUSDG) : "—", tok(),
+           readable ? "measured, not modelled" : "not readable");
+      tile(head, "Fee rate", readable && money(rate.feeAprPercent) !== null ? fmt(rate.feeAprPercent) + " %" : "—", null,
+           "a year, from the last " + duration(rate.windowSeconds || 86400));
+      sh.body.appendChild(head);
+    }
+
+    if (!empty && pos.tickLower != null && price.tick != null) {
+      sh.body.appendChild(survey({ tl: pos.tickLower, tu: pos.tickUpper, tick: price.tick, lower: pos.priceLower,
+                                   upper: pos.priceUpper, now: price.token0InToken1, base: s0, quote: s1 }));
     }
 
     var rows = el("div", "rows");
-    row(rows, "Pair", (pool.token0 && pool.token0.symbol) + " / " + (pool.token1 && pool.token1.symbol));
     var owner = rowNode(rows, "Owner", addr(pos.owner || d.owner || "—"));
     // Asked of the chain this page is configured for. The API answers about the chain it is
     // configured for, and the listing button acts on this one, so this is the row that has to be
@@ -515,67 +846,70 @@
       v.textContent = "";
       v.appendChild(addr(a));
     }, function () { /* a node that will not answer leaves the API's reading in place */ });
-    row(rows, "Range", pos.tickLower + " → " + pos.tickUpper);
-    row(rows, "Liquidity", pos.liquidity);
+    if (d.principal) row(rows, "Holds", fmtAmount(d.principal.amount0) + " " + s0 + " + " + fmtAmount(d.principal.amount1) + " " + s1);
     if (value) {
-      row(rows, "Held", (fmt(value.principal) || "—") + " " + tok());
+      row(rows, "Held, in " + tok(), (fmt(value.principal) || "—") + " " + tok());
       row(rows, "Uncollected fees", (fmt(value.fees) || "—") + " " + tok());
-      row(rows, "Market value", (fmt(value.total) || "—") + " " + tok(), true);
     } else if (d.valueNote) {
       row(rows, "Value", d.valueNote);
     }
-    p1.appendChild(rows);
-    out.appendChild(p1);
-
-    // ---- what it earns
-    var p2 = el("div", "panel");
-    p2.appendChild(el("h2", null, "What the range earns"));
-    var perDay = rate.available ? money(rate.feesPerDayUSDG) : null;
-    if (rate.available && rate.plausible !== false && perDay !== null) {
-      var r2 = el("div", "rows");
-      row(r2, "Fees per day", fmt(rate.feesPerDayUSDG) + " " + tok(), true);
-      row(r2, "Fee APR", money(rate.feeAprPercent) ? money(rate.feeAprPercent) + " %" : "—");
-      row(r2, "Measured over", duration(rate.windowSeconds) + " of chain history");
-      row(r2, "Source", rate.source + (rate.lowConfidence ? " · low confidence" : ""));
-      p2.appendChild(r2);
+    if (readable) {
+      row(rows, "Fees per day", fmt(rate.feesPerDayUSDG) + " " + tok(), true);
+      row(rows, "Measured over", duration(rate.windowSeconds) + " of chain history");
+      row(rows, "Source", rate.source + (rate.lowConfidence ? " · low confidence" : ""));
     } else if (rate.available) {
+      row(rows, "Fees per day", "not readable");
+    }
+    row(rows, "Ticks", pos.tickLower + " → " + pos.tickUpper);
+    row(rows, "Liquidity", pos.liquidity);
+    sh.body.appendChild(rows);
+
+    if (rate.available && !readable) {
       // The counter this is read from is a wrapping accumulator, and a pool that has gone round
       // reports a rate no arithmetic can rescue. Printing it anyway would be the page inventing a
-      // number; the honest row is the absence of one.
-      var r3 = el("div", "rows");
-      row(r3, "Fees per day", "not readable");
-      row(r3, "Measured over", duration(rate.windowSeconds) + " of chain history");
-      p2.appendChild(r3);
+      // number; the honest line is the absence of one.
       var w = el("p", "note warn", "This pool's fee counter has wrapped around, so nothing can be " +
         "read from it about what the range earns. No terms are proposed from a number like that.");
-      w.style.marginTop = "14px";
-      p2.appendChild(w);
-    } else {
-      p2.appendChild(el("p", "note", sentence(rate.reason || "No fee rate could be measured")));
+      w.style.marginTop = "18px";
+      sh.body.appendChild(w);
+    } else if (!rate.available) {
+      var r = el("p", "note", sentence(rate.reason || "No fee rate could be measured"));
+      r.style.marginTop = "18px";
+      sh.body.appendChild(r);
     }
-    out.appendChild(p2);
+    out.appendChild(sh.node);
 
-    // ---- the terms
-    var p3 = el("div", "panel");
-    p3.appendChild(el("h2", null, "Indicative terms"));
+    // ---- the terms, as the sentence they would be signed as
+    var t = sheet(["Indicative terms", quote.available ? quote.termDays + " days" : null],
+                  quote.available ? "Before anything is signed" : "None proposed");
     if (quote.available) {
-      var tiles = el("div", "tiles");
-      tile(tiles, "SALE PRICE", fmt(quote.suggestedSalePriceUSDG) || "—", tok(), true);
-      tile(tiles, "BUYBACK", fmt(quote.suggestedBuybackPriceUSDG) || "—", tok(), true);
-      tile(tiles, "RENT · " + quote.termDays + " DAYS", fmt(quote.suggestedRentUSDG) || "—", tok());
-      p3.appendChild(tiles);
-
+      titleBlock(t.body, el("h2", null, "Could raise " + fmt(quote.suggestedSalePriceUSDG) + " " + tok() + "."));
+      t.body.appendChild(contract([
+        "Sold for ", { f: fmt(quote.suggestedSalePriceUSDG) + " " + tok(), hl: true },
+        " and leased straight back for ", { f: quote.termDays + " days" },
+        " at ", { f: fmt(quote.suggestedRentUSDG) + " " + tok() },
+        " of rent, keeping every fee it earns. Bought back for ", { f: fmt(quote.suggestedBuybackPriceUSDG) + " " + tok() },
+        ", never more than it was sold for."
+      ]));
+      var figs = el("div", "figs");
+      fig(figs, "Sale price", fmt(quote.suggestedSalePriceUSDG) || "—", tok(), true);
+      fig(figs, "Buyback", fmt(quote.suggestedBuybackPriceUSDG) || "—", tok());
+      fig(figs, "Rent, " + quote.termDays + " days", fmt(quote.suggestedRentUSDG) || "—", tok());
+      fig(figs, "Fees expected", fmt(quote.expectedFeesOverTermUSDG) || "—", tok());
+      t.body.appendChild(figs);
       var note = "The buyback equals the sale price. The contract refuses any listing where it is " +
         "higher, so the financier is paid for the use of the asset and never for the passage of time.";
       if (quote.feeRateLowConfidence) note += " The rent rests on a narrow window of history; price it accordingly.";
-      var pn = el("p", "note", note);
-      pn.style.marginTop = "16px";
-      p3.appendChild(pn);
+      var pn = el("p", "fine", note);
+      t.body.appendChild(pn);
     } else {
-      p3.appendChild(el("p", "note", sentence(quote.reason || "No terms could be derived") +
-        " Offering it anyway would produce a listing the vault rejects."));
+      titleBlock(t.body, "No terms for this one.");
+      var nr = el("p", "note", sentence(quote.reason || "No terms could be derived") +
+        " Offering it anyway would produce a listing the vault rejects.");
+      nr.style.marginTop = "12px";
+      t.body.appendChild(nr);
     }
-    out.appendChild(p3);
+    out.appendChild(t.node);
 
     // ---- offering it
     out.appendChild(listingPanel(d));
@@ -584,14 +918,17 @@
   /** The seller's side. Shown only when there is a vault to list into and the terms are derivable;
       filled in from the quote, and every field is theirs to overwrite. */
   function listingPanel(d) {
-    var p = el("div", "panel");
-    p.appendChild(el("h2", null, "Offer it"));
+    var sh = sheet(["Offer it", ref("Position", d.tokenId)], HAS_VAULT ? "You sign this" : "No vault yet");
+    var node = sh.node, p = sh.body;
 
     if (!HAS_VAULT) {
-      p.appendChild(el("p", "note", "Listing needs the vault, and none is deployed on " +
+      titleBlock(p, "Not on " + CFG.chain.name + " yet.");
+      var nv = el("p", "note", "Listing needs the vault, and none is deployed on " +
         CFG.chain.name + " yet. When one is, this is where the terms above become an offer " +
-        "somebody can fund."));
-      return p;
+        "somebody can fund.");
+      nv.style.marginTop = "12px";
+      p.appendChild(nv);
+      return node;
     }
     // A position already inside a deal is held by the vault itself, and listing it again can only
     // be refused. Say where it is instead of offering a form that cannot work.
@@ -600,10 +937,12 @@
       var deals = await allDeals();
       var mine = deals.filter(function (x) { return x.tokenId === BigInt(d.tokenId); }).pop();
       p.textContent = "";
-      p.appendChild(el("h2", null, "Already in a deal"));
-      p.appendChild(el("p", "note", "The vault holds this position" +
-        (mine ? ", under deal " + mine.id : "") + ", so it cannot be offered again until that deal ends."));
-      var bar = el("div", "bar");
+      titleBlock(p, "Already in a deal.", null, [["wait", mine ? "Deal " + mine.id : "In the vault"]]);
+      var held = el("p", "note", "The vault holds this position" +
+        (mine ? ", under deal " + mine.id : "") + ", so it cannot be offered again until that deal ends.");
+      held.style.marginTop = "12px";
+      p.appendChild(held);
+      var bar = el("div", "acts");
       bar.appendChild(goTo("See your deals", "you", "primary"));
       bar.appendChild(goTo("Browse the market", "market", "ghost"));
       p.appendChild(bar);
@@ -615,10 +954,16 @@
     // first, so a refusal arrives named before any gas is spent.
     var priced = quote.available === true;
     if (!priced && CFG.api) {
-      p.appendChild(el("p", "note", "No terms could be derived for this position, so there is " +
-        "nothing to offer. The vault would refuse the listing."));
-      return p;
+      titleBlock(p, "Nothing to offer.");
+      var nt = el("p", "note", "No terms could be derived for this position, so there is " +
+        "nothing to offer. The vault would refuse the listing.");
+      nt.style.marginTop = "12px";
+      p.appendChild(nt);
+      return node;
     }
+    titleBlock(p, "Write the terms.", priced
+      ? "Filled in from the valuation above. Every figure is yours to change."
+      : "There is no valuation here, so the figures are yours. The vault refuses anything it cannot settle.");
 
     var form = el("div", "fields");
     var inputs = {};
@@ -665,13 +1010,12 @@
     adv.appendChild(form2);
     p.appendChild(adv);
 
-    var bar = el("div", "bar");
+    var bar = el("div", "acts");
     var go = el("button", "primary", "List this position");
     bar.appendChild(go);
-    p.appendChild(bar);
-
     var why = el("p", "note");
-    p.appendChild(why);
+    bar.appendChild(why);
+    p.appendChild(bar);
 
     /** The contract is the authority on every one of these bounds. Checking them here only means
         somebody learns they got it wrong before they pay for a block, not instead of. */
@@ -775,20 +1119,19 @@
                 async function () { listedAs = await vault("dealCount()"); });
       if (listedAs === null) return;
       p.textContent = "";
-      p.appendChild(el("h2", null, "Offered"));
-      p.appendChild(el("p", "note", "Listed as deal " + listedAs + ". It stays on the market until " +
-        "somebody funds it or the offer expires, and you can cancel it until then."));
-      var next = el("div", "bar");
-      next.style.margin = "16px 0 0";
-      var see = el("button", "primary small", "See it on the market");
-      see.addEventListener("click", function () { location.hash = "#market"; });
-      next.appendChild(see);
+      titleBlock(p, "Offered.", null, [["wait", "Listed"]]);
+      var offered = el("p", "note", "Listed as deal " + listedAs + ". It stays on the market until " +
+        "somebody funds it or the offer expires, and you can cancel it until then.");
+      offered.style.marginTop = "12px";
+      p.appendChild(offered);
+      var next = el("div", "acts");
+      next.appendChild(goTo("See it on the market", "market", "primary"));
       p.appendChild(next);
     });
 
     why.textContent = "Listing hands the position to the vault. You keep collecting its fees for " +
       "the whole term, and you can buy it back at any time until the grace window closes.";
-    return p;
+    return node;
   }
 
   // ------------------------------------------------------------------ view: market
@@ -835,16 +1178,9 @@
 
   /** An empty screen with something to look at and somewhere to go. */
   function emptyPanel(icon, text) {
-    var p = el("div", "panel empty");
-    var badge = el("span", "badge");
-    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("class", "ico");
-    var use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-    use.setAttribute("href", "#i-" + icon);
-    svg.appendChild(use);
-    badge.appendChild(svg);
-    p.appendChild(badge);
-    p.appendChild(el("p", "note", text));
+    var p = el("div", "empty");
+    p.appendChild(withIcon(el("span", "badge"), icon));
+    p.appendChild(el("p", null, text));
     return p;
   }
 
@@ -856,9 +1192,12 @@
   }
 
   function noVault() {
-    var p = el("div", "panel");
-    p.appendChild(el("p", "note", "No LeaseVault is deployed on " + CFG.chain.name + ", so there " +
-      "is no market to read here. Try another chain, or the screen that needs no contract."));
+    var p = emptyPanel("flask", "No vault is deployed on " + CFG.chain.name + " yet, so there is " +
+      "nothing to read here. The valuation and the wallet view need no contract.");
+    var bar = el("div", "bar");
+    bar.appendChild(goTo("Value a position", "value", "primary"));
+    bar.appendChild(goTo("See a wallet", "positions", "ghost"));
+    p.appendChild(bar);
     return p;
   }
 
@@ -893,30 +1232,28 @@
 
     out.textContent = "";
 
-    var top = el("div", "panel");
-    top.appendChild(el("h2", null, "Held for you"));
-    var rows = el("div", "rows");
-    row(rows, "Withdrawable from the vault", money2(owed), owed > 0n);
-    row(rows, "In your wallet", money2(held));
-    top.appendChild(rows);
+    // What the vault is holding for this account, as a slip: one sentence, one button.
+    var top = el("div", "held");
+    var said = el("p");
     if (owed > 0n) {
-      var bar = el("div", "bar");
-      bar.style.marginTop = "16px";
-      bar.style.marginBottom = "0";
-      var w = el("button", "primary", "Withdraw " + money2(owed));
+      said.appendChild(document.createTextNode("The vault is holding "));
+      said.appendChild(el("span", "f", money2(owed)));
+      said.appendChild(document.createTextNode(" for you."));
+    } else {
+      said.textContent = "The vault is holding nothing for you right now.";
+    }
+    top.appendChild(said);
+    if (owed > 0n) {
+      var w = el("button", "primary", "Withdraw it");
       w.addEventListener("click", function () {
         act(w, "withdrawing…", CFG.vault, Eth.calldata("withdrawUSDG()", []), renderYou);
       });
-      bar.appendChild(w);
-      top.appendChild(bar);
+      top.appendChild(w);
     }
     // A test network's settlement token is free to mint, and a deal cannot be tried without some.
     // Mainnet is excluded by id as well as by config: its token is money, and no button here
     // should ever look like it hands money out.
     if (CFG.testToken && CFG.chain.id !== 4663 && HAS_VAULT) {
-      var faucetBar = el("div", "bar");
-      faucetBar.style.marginTop = "16px";
-      faucetBar.style.marginBottom = "0";
       var amount = Eth.toUnits("10000", DEC);
       var mint = el("button", "ghost", "Get " + money2(amount));
       mint.title = tok() + " is a test token anyone can mint. It is worth nothing.";
@@ -924,9 +1261,9 @@
         act(mint, "minting…", CFG.usdg, tokenData("mint(address,uint256)", ["address", "uint256"], [me, amount]),
             renderYou);
       });
-      faucetBar.appendChild(mint);
-      top.appendChild(faucetBar);
+      top.appendChild(mint);
     }
+    top.appendChild(el("p", "fine", "In your wallet: " + money2(held) + "."));
     out.appendChild(top);
 
     // A position the vault is holding for you: after a cancel, a buyback, or a release.
@@ -940,18 +1277,18 @@
       return same(claimant, me) ? tokenId : null;
     }));
     waiting.filter(Boolean).forEach(function (tokenId) {
-      var p = el("div", "panel");
-      p.appendChild(el("h2", null, "Position " + tokenId + " is waiting for you"));
-      p.appendChild(el("p", "note", "The vault is holding it. Nothing expires; take it when you like."));
-      var bar = el("div", "bar");
-      bar.style.marginTop = "16px";
-      bar.style.marginBottom = "0";
+      var p = el("div", "held");
+      var said = el("p");
+      said.appendChild(document.createTextNode("Position "));
+      said.appendChild(el("span", "f", tokenId));
+      said.appendChild(document.createTextNode(" is waiting for you in the vault."));
+      p.appendChild(said);
       var b = el("button", "primary", "Withdraw the position");
       b.addEventListener("click", function () {
         act(b, "withdrawing…", CFG.vault, Eth.calldata("withdrawPosition(uint256)", [tokenId]), renderYou);
       });
-      bar.appendChild(b);
-      p.appendChild(bar);
+      p.appendChild(b);
+      p.appendChild(el("p", "fine", "Nothing expires; take it when you like."));
       out.appendChild(p);
     });
 
@@ -969,76 +1306,118 @@
 
   // ------------------------------------------------------------------ a deal, and what you can do to it
 
+  /** A deal as the lease it is: its references across the top, the contract in one sentence with
+      the figures in its blanks, the term to scale while it runs, who signed it, and what the reader
+      can do to it. Every figure is the vault's own; nothing here is estimated. */
   function dealCard(d, where) {
     var me = Wallet.state.account;
     var isSeller = same(d.seller, me);
     var isFinancier = same(d.financier, me);
     var now = chainNow;
-
-    var card = el("div", "deal");
-
-    var head = el("div", "head");
-    head.appendChild(el("h3", null, "Deal " + d.id));
-    head.appendChild(el("span", "note", "position " + d.tokenId));
-    head.appendChild(el("span", "spacer"));
     var st = Number(d.state);
-    var look = st === 1 ? "wait" : st === 2 ? "ok" : st === 3 ? "ok" : "no";
-    head.appendChild(el("span", "pill " + look, d.stateName.replace(/([a-z])([A-Z])/g, "$1 $2")));
-    if (isSeller) head.appendChild(el("span", "pill ok", "you are the lessee"));
-    if (isFinancier) head.appendChild(el("span", "pill ok", "you are the financier"));
-    card.appendChild(head);
+    var days = duration(d.term);
 
-    var sub = el("div", "sub");
-    var pair = el("span", "pair", "…");
-    sub.appendChild(pair);
+    var pairRef = el("span", null, "…");
     Promise.all([symbolOf(d.currency0), symbolOf(d.currency1)]).then(function (s) {
-      pair.textContent = s[0] + " / " + s[1];
+      pairRef.textContent = s[0] + " · " + s[1];
     });
-    var r = rentOnPrice(d);
-    if (r) {
-      var y = el("span", "yield");
-      y.appendChild(document.createTextNode("Rent on price "));
-      y.appendChild(el("b", null, r.period.toFixed(2) + " %"));
-      y.appendChild(document.createTextNode(" over " + duration(d.term) + " · about " +
-        (r.yearly >= 100 ? Math.round(r.yearly) : r.yearly.toFixed(1)) + " % a year"));
-      sub.appendChild(y);
-    }
-    card.appendChild(sub);
+    var role = isSeller ? "You are the lessee" : isFinancier ? "You are the financier" : st === 1 ? "Open to fund" : null;
+    var sh = sheet([ref("Deal No.", d.id), ref("Position", d.tokenId), pairRef], role);
+    var card = sh.node, b = sh.body;
 
-    var terms = el("div", "terms");
-    term(terms, "SALE PRICE", money2(d.price));
-    term(terms, "BUYBACK", money2(d.buybackPrice));
-    term(terms, "RENT · " + duration(d.term), money2(d.rent));
-    if (st === 1) term(terms, "OFFER CLOSES", when(d.listingExpiry));
-    else if (st === 2) term(terms, "LEASE ENDS", when(Number(d.fundedAt) + Number(d.term)));
-    else term(terms, "GRACE", duration(d.grace));
-    card.appendChild(terms);
-
-    if (st === 2) {
-      var rows = el("div", "rows");
-      row(rows, "Buy-back window closes", when(Number(d.fundedAt) + Number(d.term) + Number(d.grace)));
-      row(rows, "Rent already credited", usdg(d.rentClaimed) + " of " + money2(d.rent));
-      if (Number(d.pausedTotal) > 0 || Number(d.pausedSince) > 0) {
-        row(rows, "Frozen time recorded", duration(d.pausedTotal));
+    function heading(main, faint) {
+      var h = el("h2", null, main);
+      if (faint) {
+        h.appendChild(document.createTextNode(" "));
+        h.appendChild(el("span", null, faint));
       }
-      card.appendChild(rows);
+      return h;
     }
+    var heads = {
+      1: heading("On offer,", "for " + days + "."),
+      2: heading("Sold, leased back,", days + "."),
+      3: heading("Bought back."),
+      4: heading("Delivered", "to the financier."),
+      5: heading("Withdrawn", "before anyone funded it.")
+    };
+    var look = st === 1 ? "wait" : st === 2 || st === 3 ? "" : "flat";
+    titleBlock(b, heads[st] || heading("Deal " + d.id + "."), null,
+               [[look, d.stateName.replace(/([a-z])([A-Z])/g, "$1 $2")]]);
+
+    // The sentence names the reader as "you" wherever they are a party, and an address otherwise.
+    function name(a, capital) { return same(a, me) ? (capital ? "You" : "you") : who(a); }
+    var P = { f: money2(d.price) }, R = { f: money2(d.rent) }, B = { f: money2(d.buybackPrice) };
+    var T = { f: days };
+    var closes = Number(d.fundedAt) + Number(d.term) + Number(d.grace);
+    var parts;
+    if (st === 1 && isSeller) {
+      P.hl = true;
+      parts = ["You offer this position for ", P, " and would lease it back for ", T, " at ", R,
+               " of rent, keeping every fee it earns, with the right to buy it back for ", B, " until ",
+               { f: duration(d.grace) }, " after the lease ends. The offer closes ", { f: when(d.listingExpiry) }, "."];
+    } else if (st === 1) {
+      P.hl = true;
+      parts = [who(d.seller), " offers this position for ", P, " and would lease it back for ", T, " at ", R,
+               " of rent. Whoever funds it owns it outright, and is paid ", B, " if the lessee buys it back within ",
+               { f: duration(d.grace) }, " of the lease ending. The offer closes ", { f: when(d.listingExpiry) }, "."];
+    } else if (st === 2 && isFinancier) {
+      R.hl = true;
+      parts = ["You bought this position from ", who(d.seller), " for ", P, " and lease it to them for ", T,
+               " at a rent of ", R, ". They may buy it back for ", B, " until ", { f: dateOf(closes) },
+               "; after that it is yours to take."];
+    } else if (st === 2) {
+      B.hl = isSeller;
+      parts = [name(d.seller, true), " sold this position to ", name(d.financier),
+               " for ", P, isSeller ? " and lease it back for " : " and leases it back for ", T, " at a rent of ", R,
+               ", keeping every fee it earns. ", isSeller ? "You may" : "The lessee may", " buy it back for ", B,
+               " until ", { f: dateOf(closes) }, "."];
+    } else if (st === 3) {
+      parts = [name(d.seller, true), " sold this position to ", name(d.financier), " for ", P, ", leased it back for ", T,
+               " at ", R, " of rent, and bought it back for ", B, "."];
+    } else if (st === 4) {
+      parts = ["The buy-back window closed without a buyback, so the position went to ", name(d.financier),
+               ", who paid ", P, " for it and was owed ", R, " of rent."];
+    } else {
+      parts = [name(d.seller, true), " offered this position for ", P, " and withdrew the offer before anyone funded it."];
+    }
+    b.appendChild(contract(parts));
+
+    if (st === 2) b.appendChild(termLine(d));
+
+    var figs = el("div", "figs");
+    fig(figs, "Sale price", usdg(d.price), tok());
+    fig(figs, "Buyback", usdg(d.buybackPrice), tok(), st === 2 && isSeller);
+    var r = rentOnPrice(d);
+    fig(figs, "Rent on price", r ? r.period.toFixed(2) + " %" : "—", r ? "over " + days : null, false,
+        r ? "about " + (r.yearly >= 100 ? Math.round(r.yearly) : r.yearly.toFixed(1)) + " % a year" : null);
+    if (st === 1) fig(figs, "Offer closes", when(d.listingExpiry));
+    else if (st === 2) fig(figs, "Rent credited", usdg(d.rentClaimed), "of " + money2(d.rent), isFinancier);
+    else fig(figs, "Rent", usdg(d.rent), tok());
+    b.appendChild(figs);
+
+    if (st === 2 && (Number(d.pausedTotal) > 0 || Number(d.pausedSince) > 0)) {
+      var rows = el("div", "rows");
+      row(rows, "Frozen time recorded", duration(d.pausedTotal));
+      b.appendChild(rows);
+    }
+
+    b.appendChild(parties(d, me));
 
     var acts = el("div", "acts");
     var any = false;
 
     function button(label, cls, fn) {
-      var b = el("button", (cls || "ghost") + " small", label);
-      b.addEventListener("click", function () { fn(b); });
-      acts.appendChild(b);
+      var btn = el("button", (cls || "ghost") + " small", label);
+      btn.addEventListener("click", function () { fn(btn); });
+      acts.appendChild(btn);
       any = true;
-      return b;
+      return btn;
     }
 
     // ---- listed
     if (st === 1) {
       if (!isSeller) {
-        button("Fund it · " + money2(d.price), "primary", async function (b) {
+        button("Fund it · " + money2(d.price), "primary", async function (btn) {
           if (!Wallet.state.account) {
             try { await Wallet.connect(); } catch (err) { return say(Eth.explain(err) || "", "err"); }
           }
@@ -1046,15 +1425,15 @@
           if (have < d.price) {
             return say(await shortOf("Funding this", d.price, have), "err");
           }
-          var allowed = await ensureUsdgAllowance(b, d.price);
+          var allowed = await ensureUsdgAllowance(btn, d.price);
           if (!allowed) return;
-          await act(b, (allowed === "approved" ? "Step 2 of 2 · " : "") + "funding…", CFG.vault,
+          await act(btn, (allowed === "approved" ? "Step 2 of 2 · " : "") + "funding…", CFG.vault,
                     Eth.calldata("fund(uint256)", [d.id]), refresh);
         });
       }
       if (isSeller) {
-        button("Cancel the offer", "ghost", function (b) {
-          act(b, "cancelling…", CFG.vault, Eth.calldata("cancel(uint256)", [d.id]), refresh);
+        button("Cancel the offer", "ghost", function (btn) {
+          act(btn, "cancelling…", CFG.vault, Eth.calldata("cancel(uint256)", [d.id]), refresh);
         });
       }
     }
@@ -1062,42 +1441,43 @@
     // ---- active
     if (st === 2) {
       if (isSeller) {
-        if (now <= Number(d.fundedAt) + Number(d.term)) {
-          button("Collect the fees", "ghost", function (b) {
-            act(b, "collecting…", CFG.vault, Eth.calldata("collectFees(uint256)", [d.id]), refresh);
-          });
-        }
-        button("Buy it back · " + money2(d.buybackPrice), "primary", async function (b) {
+        button("Buy it back · " + money2(d.buybackPrice), "primary", async function (btn) {
           var have = await usdgBalance(Wallet.state.account);
           if (have < d.buybackPrice) {
             return say(await shortOf("Buying it back", d.buybackPrice, have), "err");
           }
-          var allowed = await ensureUsdgAllowance(b, d.buybackPrice);
+          var allowed = await ensureUsdgAllowance(btn, d.buybackPrice);
           if (!allowed) return;
-          await act(b, (allowed === "approved" ? "Step 2 of 2 · " : "") + "buying back…", CFG.vault,
+          await act(btn, (allowed === "approved" ? "Step 2 of 2 · " : "") + "buying back…", CFG.vault,
                     Eth.calldata("buyBack(uint256)", [d.id]), refresh);
         });
+        if (now <= Number(d.fundedAt) + Number(d.term)) {
+          button("Collect the fees", "ghost", function (btn) {
+            act(btn, "collecting…", CFG.vault, Eth.calldata("collectFees(uint256)", [d.id]), refresh);
+          });
+        }
       }
       if (isFinancier) {
-        button("Claim the rent so far", "ghost", function (b) {
-          act(b, "claiming…", CFG.vault, Eth.calldata("claimRent(uint256)", [d.id]), refresh);
+        if (now >= closes) {
+          button("Take delivery", "primary", function (btn) {
+            act(btn, "releasing…", CFG.vault, Eth.calldata("release(uint256)", [d.id]), refresh);
+          });
+        }
+        button("Claim the rent so far", "ghost", function (btn) {
+          act(btn, "claiming…", CFG.vault, Eth.calldata("claimRent(uint256)", [d.id]), refresh);
         });
         // The financier owns the position outright, so they can sell that ownership on while the
         // lease runs. Nothing about the lease changes: same rent, same buyback, same dates, a
         // different counterparty. It is what makes a funded deal an asset rather than a lock-up,
         // and it is the reason the vault never needed a way to cancel one.
-        button("Sell your side", "ghost", function () { openTransfer(card, d); });
-        if (now >= Number(d.fundedAt) + Number(d.term) + Number(d.grace)) {
-          button("Take delivery", "primary", function (b) {
-            act(b, "releasing…", CFG.vault, Eth.calldata("release(uint256)", [d.id]), refresh);
-          });
-        }
+        button("Sell your side", "ghost", function () { openTransfer(b, d); });
       }
     }
 
-    if (any) card.appendChild(acts);
+    if (any) b.appendChild(acts);
     else if (where === "market" && st === 1 && isSeller) {
-      card.appendChild(el("p", "note", "This is your own listing, and the vault refuses to let you fund it."));
+      var own = el("p", "fine", "This is your own listing, and the vault refuses to let you fund it.");
+      b.appendChild(own);
     }
     return card;
   }
@@ -1159,31 +1539,6 @@
     return Wallet.state.account ? Wallet.state.account.toLowerCase() : null;
   }
 
-  function rangeBar(p) {
-    var tl = p.position.tickLower, tu = p.position.tickUpper;
-    var tick = p.price.tick;
-    var span = tu - tl, lo = tl - span * 0.35, hi = tu + span * 0.35;
-    if (tick < lo) lo = tick - span * 0.1;
-    if (tick > hi) hi = tick + span * 0.1;
-    var pct = function (t) { return Math.max(0, Math.min(100, (t - lo) / (hi - lo) * 100)); };
-    var wrap = el("div");
-    var bar = el("div", "rangebar");
-    var inside = el("div", "in");
-    inside.style.left = pct(tl) + "%";
-    inside.style.width = (pct(tu) - pct(tl)) + "%";
-    var at = el("div", "at");
-    at.style.left = pct(tick) + "%";
-    at.title = "current price";
-    bar.appendChild(inside);
-    bar.appendChild(at);
-    wrap.appendChild(bar);
-    var lab = el("div", "rangelab");
-    lab.appendChild(el("span", null, "range " + tl + " → " + tu));
-    lab.appendChild(el("span", null, "price at tick " + tick));
-    wrap.appendChild(lab);
-    return wrap;
-  }
-
   /** An icon beside a label, from the sprite in the page. `after` puts it on the trailing side,
       which is where an icon that means "go" belongs. */
   function withIcon(node, icon, after) {
@@ -1197,73 +1552,67 @@
     return node;
   }
 
+  /** One position in a wallet, as a sheet: its references, the range drawn on the price line,
+      what it is worth and earns, and the remarks the chain supports about it. */
   function pfCard(p) {
     var worst = (p.findings || []).reduce(function (w, f) {
       var rank = { bad: 3, warn: 2, ok: 1, info: 0 };
       return rank[f.level] > rank[w] ? f.level : w;
     }, "info");
-    var card = el("div", "pf" + (worst === "bad" || worst === "warn" ? " " + worst : ""));
-    var head = el("div", "head");
-    head.appendChild(el("span", "pair", p.pool.pair));
-    head.appendChild(el("span", "id", "#" + p.tokenId));
-    var liq = BigInt(p.position.liquidity || "0");
-    head.appendChild(el("span", "pill " + (liq === 0n ? "wait" : p.position.inRange ? "ok" : "no"),
-      liq === 0n ? "empty" : p.position.inRange ? "in range" : "out of range"));
-    if (p.pool.hooks && p.pool.hooks.address) {
-      var hk = el("span", "pill wait", "hook");
-      hk.title = p.pool.hooks.permissions.join(", ") || "no permissions";
-      head.appendChild(hk);
-    }
-    card.appendChild(head);
+    var pool = p.pool || {}, pos = p.position || {}, price = p.price || {};
+    var s0 = (pool.token0 && pool.token0.symbol) || "token0", s1 = (pool.token1 && pool.token1.symbol) || "token1";
+    var hooked = pool.hooks && pool.hooks.address;
+    var hookRef = el("span", null, hooked ? "Hook attached" : "No hook");
+    if (hooked) hookRef.title = pool.hooks.permissions.join(", ") || "no permissions";
+    var sh = sheet([ref("Position No.", p.tokenId), s0 + " · " + s1,
+                    feeLabel(pool.feePips, pool.hooks && pool.hooks.dynamicFee)], hookRef);
+    if (worst === "bad") sh.node.classList.add("bad");
+    var b = sh.body;
 
-    var v = p.valueUSDG || {};
+    var liq = BigInt(pos.liquidity || "0");
+    var stamp = liq === 0n ? ["flat", "Empty"] : pos.inRange ? ["", "In range"] : ["bad", "Out of range"];
+    var between = liq === 0n ? "Holds nothing. Its fees, if any, are still waiting." : rangeSentence(pos, s0, s1);
+    titleBlock(b, pairHeading(s0, s1), between, [stamp]);
+
+    if (liq !== 0n && price.tick != null) {
+      b.appendChild(survey({ tl: pos.tickLower, tu: pos.tickUpper, tick: price.tick, lower: pos.priceLower,
+                             upper: pos.priceUpper, now: price.token0InToken1, base: s0, quote: s1 }));
+    }
+
+    var v = p.valueUSDG || {}, earn = p.earning || {};
     var figs = el("div", "figs");
-    term(figs, "Value", v.total != null ? fmt(v.total) + " USDG" : "—");
-    term(figs, "Fees waiting", v.fees != null ? fmt(v.fees) + " USDG" : "—");
-    term(figs, "Earned / day", p.earning.feesPerDayUSDG != null ? fmt(p.earning.feesPerDayUSDG) + " USDG" : "—");
-    term(figs, "APR, last day", p.earning.feeAprPercent != null ? fmt(p.earning.feeAprPercent) + " %" : "—");
-    card.appendChild(figs);
-    if (liq !== 0n) card.appendChild(rangeBar(p));
+    fig(figs, "Value", v.total != null ? fmt(v.total) : "—", "USDG");
+    fig(figs, "Fees waiting", v.fees != null ? fmt(v.fees) : "—", "USDG");
+    fig(figs, "Earned, last day", earn.feesPerDayUSDG != null ? fmt(earn.feesPerDayUSDG) : "—", "USDG");
+    fig(figs, "Rate, last day", earn.feeAprPercent != null ? fmt(earn.feeAprPercent) + " %" : "—", "a year", true);
+    b.appendChild(figs);
 
-    if ((p.findings || []).length) {
-      var list = el("ul", "findings");
-      p.findings.forEach(function (f) {
-        var li = el("li", f.level);
-        var body = el("div");
-        body.appendChild(el("b", null, f.title));
-        body.appendChild(el("span", null, f.detail));
-        li.appendChild(body);
-        list.appendChild(li);
-      });
-      card.appendChild(list);
-    }
+    if ((p.findings || []).length) b.appendChild(remarks(p.findings));
 
-    var bar = el("div", "bar");
-    var val = withIcon(el("button", "ghost small", "Value it"), "search");
-    val.addEventListener("click", function () {
+    var acts = el("div", "acts");
+    function value() {
       location.hash = "#value";
       $("tokenId").value = String(p.tokenId);
       lookup();
-    });
-    bar.appendChild(val);
-    if (p.lease && p.lease.available && HAS_VAULT) {
-      var list2 = el("button", "primary small", "Offer it on Tenure");
-      list2.addEventListener("click", function () {
-        location.hash = "#value";
-        $("tokenId").value = String(p.tokenId);
-        lookup();
-      });
-      bar.appendChild(list2);
     }
+    var lease = p.lease || {};
+    if (lease.available && HAS_VAULT) {
+      var raise = el("button", "primary small", "Raise " + fmt(lease.suggestedSalePriceUSDG) + " " + tok() + " on it");
+      raise.addEventListener("click", value);
+      acts.appendChild(raise);
+    }
+    var val = withIcon(el("button", (lease.available && HAS_VAULT ? "ghost" : "primary") + " small", "Value it in full"), "search");
+    val.addEventListener("click", value);
+    acts.appendChild(val);
     if (CFG.chain.explorer) {
-      var ex = el("a", "ghost small btnlink", "On the explorer");
+      var ex = el("a", "link", "On the explorer ↗");
       ex.href = CFG.chain.explorer.replace(/\/$/, "") + "/token/" + CFG.posm + "/instance/" + p.tokenId;
       ex.target = "_blank";
       ex.rel = "noopener";
-      bar.appendChild(ex);
+      acts.appendChild(ex);
     }
-    card.appendChild(bar);
-    return card;
+    b.appendChild(acts);
+    return sh.node;
   }
 
   async function renderPositions() {
@@ -1303,17 +1652,20 @@
 
     var s = body.summary;
     var tiles = el("div", "tiles four");
-    tile(tiles, "POSITIONS", String(s.positions), s.inRange + " in range" + (s.outOfRange ? ", " + s.outOfRange + " out" : ""));
-    tile(tiles, "VALUE", fmt(s.valueUSDG), "USDG", true);
-    tile(tiles, "FEES WAITING", fmt(s.uncollectedFeesUSDG), "USDG");
-    tile(tiles, "EARNED / DAY", s.feesPerDayUSDG != null ? fmt(s.feesPerDayUSDG) : "—", "USDG, last day");
+    tile(tiles, "Positions", String(s.positions), null,
+         s.inRange + " in range" + (s.outOfRange ? ", " + s.outOfRange + " out" : "") + (s.empty ? ", " + s.empty + " empty" : ""));
+    tile(tiles, "Value", fmt(s.valueUSDG), "USDG", "at each pool's own price", true);
+    tile(tiles, "Fees waiting", fmt(s.uncollectedFeesUSDG), "USDG", "yours to collect");
+    tile(tiles, "Earned, last day", s.feesPerDayUSDG != null ? fmt(s.feesPerDayUSDG) : "—", "USDG", "measured on the chain");
     out.appendChild(tiles);
     if (!s.complete || (body.truncated || []).length || (body.unreadable || []).length) {
       var notes = [];
       if (!s.complete) notes.push("This wallet has received more positions than can be listed at once; these are its most recent.");
       if ((body.truncated || []).length) notes.push(body.truncated.length + " more are held and not valued here.");
       if ((body.unreadable || []).length) notes.push(body.unreadable.length + " could not be read just now.");
-      out.appendChild(el("p", "note", notes.join(" ")));
+      var nn = el("p", "note", notes.join(" "));
+      nn.style.marginBottom = "24px";
+      out.appendChild(nn);
     }
     if (!(body.positions || []).length) {
       return out.appendChild(emptyPanel("search",
@@ -1505,7 +1857,11 @@
       there is not. Saying which avoids a button called "Value it" that values nothing. */
   function paintValueScreen() {
     var section = document.querySelector('[data-view="value"]');
-    section.querySelector("h1").textContent = CFG.api ? "Value a position." : "Offer a position.";
+    var h1 = section.querySelector("h1");
+    h1.textContent = CFG.api ? "What is it " : "What would you ";
+    h1.appendChild(el("em", null, CFG.api ? "worth?" : "offer it for?"));
+    section.querySelector(".eyebrow").textContent = CFG.api
+      ? "No. 01 — Valuation, read from the chain" : "No. 01 — An offer, on " + CFG.chain.name;
     section.querySelector(".lede").textContent = CFG.api
       ? "Paste the id of a Uniswap v4 position and see what it holds, what its range has actually " +
         "earned, and the terms it could be offered on. Nothing is signed here."
@@ -1515,7 +1871,7 @@
     var lookupBtn = $("lookup");
     lookupBtn.textContent = CFG.api ? "Value it" : "Check it";
     withIcon(lookupBtn, "arrow", true);
-    document.querySelector('[data-go="value"]').textContent = CFG.api ? "Value" : "Offer";
+    document.querySelector('[data-go="value"] span').textContent = CFG.api ? "Value" : "Offer";
     $("tokenId").placeholder = "Position id" + ((CFG.examples || [])[0] ? ", for example " + CFG.examples[0] : "");
 
     var tryIt = $("try");
