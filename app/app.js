@@ -72,19 +72,50 @@
     return e;
   }
 
+  /* A transaction reports itself in the corner, the way a wallet does, and stacks. The banner this
+     replaces sat above the page and pushed whatever button the reader had just aimed at. */
+  var TOAST_ICON = { ok: "check", err: "no-fee", info: "spark" };
+
   function say(text, kind, link) {
-    var m = $("msg");
-    m.textContent = text;
+    kind = kind || "info";
+    var host = $("toasts");
+    var t = el("div", "toast " + kind);
+    var icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    icon.setAttribute("class", "ico");
+    var use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", "#i-" + (TOAST_ICON[kind] || "spark"));
+    icon.appendChild(use);
+    t.appendChild(icon);
+
+    var body = el("div");
+    body.appendChild(el("p", null, text));
     if (link) {
-      m.appendChild(document.createTextNode(" "));
       var a = el("a", null, link.label);
       a.href = link.href;
       a.target = "_blank";
       a.rel = "noopener";
-      m.appendChild(a);
+      body.appendChild(a);
     }
-    m.className = "msg show " + (kind || "info");
-    m.scrollIntoView({ block: "nearest" });
+    t.appendChild(body);
+
+    var close = el("button", null, "\u00d7");
+    close.type = "button";
+    close.setAttribute("aria-label", "Dismiss");
+    close.addEventListener("click", function () { drop(t); });
+    t.appendChild(close);
+
+    host.appendChild(t);
+    while (host.children.length > 3) drop(host.firstElementChild, true);
+    // An error is read, not glanced at, so it stays about twice as long.
+    setTimeout(function () { drop(t); }, kind === "err" ? 14000 : 8000);
+    return t;
+  }
+
+  function drop(t, now) {
+    if (!t || !t.parentNode) return;
+    if (now) return t.remove();
+    t.classList.add("leaving");
+    setTimeout(function () { t.remove(); }, 220);
   }
 
   /** Where a transaction can be checked by somebody who does not trust this page. Not on a fork:
@@ -94,7 +125,9 @@
     return { href: CFG.chain.explorer.replace(/\/$/, "") + "/tx/" + hash, label: "View it on the explorer." };
   }
 
-  function quiet() { $("msg").className = "msg"; }
+  function quiet() {
+    Array.prototype.forEach.call($("toasts").children, function (t) { drop(t, true); });
+  }
 
   function short(a) { return a ? a.slice(0, 6) + "…" + a.slice(-4) : "—"; }
 
@@ -118,9 +151,26 @@
     return r;
   }
 
-  function loading(text) {
+  /** The shape of the answer, drawn before it arrives, so nothing jumps when it does. `text` is
+      what a screen reader is told; sighted readers get the shape. */
+  function loading(text, figs) {
     var p = el("div", "panel");
-    p.appendChild(el("div", "loading", text));
+    p.setAttribute("aria-busy", "true");
+    p.setAttribute("aria-label", text);
+    var card = el("div", "sk-card");
+    card.appendChild(el("div", "sk h w40"));
+    var grid = el("div", "sk-figs");
+    for (var i = 0; i < (figs || 4); i++) {
+      var col = el("div");
+      col.appendChild(el("div", "sk w60"));
+      var v = el("div", "sk t");
+      v.style.marginTop = "8px";
+      col.appendChild(v);
+      grid.appendChild(col);
+    }
+    card.appendChild(grid);
+    card.appendChild(el("div", "sk w25"));
+    p.appendChild(card);
     return p;
   }
 
@@ -388,7 +438,8 @@
       say("Could not reach the valuation API: " + (err && err.message ? err.message : err), "err");
     } finally {
       btn.disabled = false;
-      btn.textContent = "Value it";
+      btn.textContent = CFG.api ? "Value it" : "Check it";
+      withIcon(btn, "arrow", true);
     }
   }
 
@@ -430,7 +481,7 @@
     var p1 = el("div", "panel");
     p1.appendChild(el("h2", null, "Position " + d.tokenId));
 
-    var pills = el("div");
+    var pills = el("div", "bar");
     pills.style.marginBottom = "16px";
     // An emptied position is still "in range": its interval contains the price, it just holds
     // nothing. A green badge on that says the opposite of what matters.
@@ -439,6 +490,19 @@
     pills.appendChild(el("span", "pill " + st[0], st[1]));
     if (pos.hasSubscriber) pills.appendChild(el("span", "pill no", "has a subscriber"));
     p1.appendChild(pills);
+
+    // The three figures somebody opened this screen for, before the detail they can check after.
+    if (value) {
+      var head = el("div", "tiles");
+      tile(head, "MARKET VALUE", fmt(value.total) || "—", tok(), true);
+      tile(head, "FEES PER DAY", rate.available && rate.plausible !== false && money(rate.feesPerDayUSDG) !== null
+        ? fmt(rate.feesPerDayUSDG) : "—", tok());
+      tile(head, "FEE APR", rate.available && rate.plausible !== false && money(rate.feeAprPercent) !== null
+        ? fmt(rate.feeAprPercent) + " %" : "—", "last " + duration(rate.windowSeconds || 86400));
+      head.style.marginTop = "0";
+      head.style.marginBottom = "18px";
+      p1.appendChild(head);
+    }
 
     var rows = el("div", "rows");
     row(rows, "Pair", (pool.token0 && pool.token0.symbol) + " / " + (pool.token1 && pool.token1.symbol));
@@ -749,10 +813,9 @@
 
     out.textContent = "";
     if (!open.length) {
-      var p = el("div", "panel empty");
-      p.appendChild(el("p", "note", deals.length
+      var p = emptyPanel("tag", deals.length
         ? "Nothing is on offer right now. " + count(deals.length, "deal") + " been listed here."
-        : "Nothing has been listed on this vault yet."));
+        : "Nothing has been listed on this vault yet.");
       p.appendChild(goTo("Offer a position", "value", "primary"));
       return out.appendChild(p);
     }
@@ -768,6 +831,21 @@
       if (have + owed >= need) text += " The vault holds " + money2(owed) + " for you: withdraw it on the You screen first.";
     } catch (e) { /* the reason above stands on its own */ }
     return text;
+  }
+
+  /** An empty screen with something to look at and somewhere to go. */
+  function emptyPanel(icon, text) {
+    var p = el("div", "panel empty");
+    var badge = el("span", "badge");
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "ico");
+    var use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", "#i-" + icon);
+    svg.appendChild(use);
+    badge.appendChild(svg);
+    p.appendChild(badge);
+    p.appendChild(el("p", "note", text));
+    return p;
   }
 
   function goTo(label, view, cls) {
@@ -793,9 +871,8 @@
 
     var me = Wallet.state.account;
     if (!me) {
-      var p = el("div", "panel");
-      p.appendChild(el("p", "note", "Connect a wallet to see the deals you are a party to."));
-      var b = el("button", "ghost small", "Connect wallet");
+      var p = emptyPanel("wallet", "Connect a wallet to see the deals you are a party to.");
+      var b = el("button", "primary small", "Connect wallet");
       b.addEventListener("click", doConnect);
       p.appendChild(b);
       return out.appendChild(p);
@@ -879,8 +956,7 @@
     });
 
     if (!mine.length) {
-      var none = el("div", "panel empty");
-      none.appendChild(el("p", "note", "You are not a party to any deal on this vault yet."));
+      var none = emptyPanel("key", "You are not a party to any deal on this vault yet.");
       var bar = el("div", "bar");
       bar.appendChild(goTo("Browse the market", "market", "primary"));
       bar.appendChild(goTo("Offer a position", "value", "ghost"));
@@ -1108,6 +1184,19 @@
     return wrap;
   }
 
+  /** An icon beside a label, from the sprite in the page. `after` puts it on the trailing side,
+      which is where an icon that means "go" belongs. */
+  function withIcon(node, icon, after) {
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "ico");
+    var use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", "#i-" + icon);
+    svg.appendChild(use);
+    if (after) node.appendChild(svg);
+    else node.insertBefore(svg, node.firstChild);
+    return node;
+  }
+
   function pfCard(p) {
     var worst = (p.findings || []).reduce(function (w, f) {
       var rank = { bad: 3, warn: 2, ok: 1, info: 0 };
@@ -1150,7 +1239,7 @@
     }
 
     var bar = el("div", "bar");
-    var val = el("button", "ghost small", "Value it");
+    var val = withIcon(el("button", "ghost small", "Value it"), "search");
     val.addEventListener("click", function () {
       location.hash = "#value";
       $("tokenId").value = String(p.tokenId);
@@ -1188,14 +1277,15 @@
     }
     var owner = pfOwner();
     if (!owner) {
-      var p = el("div", "panel empty");
-      p.appendChild(el("p", "note", "Connect a wallet to see its positions, or paste any address above: this screen only reads."));
+      var p = emptyPanel("wallet", "Connect a wallet to see its positions, or paste any address above: this screen only reads.");
       var b = el("button", "primary small", "Connect wallet");
       b.addEventListener("click", doConnect);
       p.appendChild(b);
       return out.appendChild(p);
     }
-    out.appendChild(loading("Finding the positions of " + short(owner) + ". The first look at a wallet reads its whole history and can take a few seconds"));
+    out.appendChild(loading("Finding the positions of " + short(owner)
+      + ". The first look at a wallet reads its whole history and can take a few seconds", 4));
+    out.appendChild(loading("Reading each position", 4));
     var body;
     try {
       var res = await fetch(CFG.api + "/v1/owner/" + owner + "/positions");
@@ -1226,9 +1316,8 @@
       out.appendChild(el("p", "note", notes.join(" ")));
     }
     if (!(body.positions || []).length) {
-      var none = el("div", "panel empty");
-      none.appendChild(el("p", "note", short(owner) + " holds no Uniswap v4 position on " + CFG.chain.name + "."));
-      return out.appendChild(none);
+      return out.appendChild(emptyPanel("search",
+        short(owner) + " holds no Uniswap v4 position on " + CFG.chain.name + "."));
     }
 
     var groups = {
@@ -1314,7 +1403,18 @@
     }
     // The chain is already named by the selector and the account by the wallet button, so the
     // network indicator only appears when something needs doing, and it is the thing to click.
-    connect.textContent = s.account ? short(s.account) : "Connect wallet";
+    connect.textContent = "";
+    if (s.account) {
+      // A mark derived from the address itself, so two accounts are never mistaken for each other.
+      var dot = el("span", "dot");
+      var hue = parseInt(s.account.slice(2, 8), 16) % 360;
+      dot.style.background = "conic-gradient(from 140deg, hsl(" + hue + " 70% 62%), hsl(" +
+        ((hue + 80) % 360) + " 70% 58%), hsl(" + ((hue + 200) % 360) + " 70% 60%), hsl(" + hue + " 70% 62%))";
+      connect.appendChild(dot);
+      connect.appendChild(document.createTextNode(short(s.account)));
+    } else {
+      connect.textContent = "Connect wallet";
+    }
     connect.title = s.account || "";
     var wrong = !!s.account && !!s.chainId && s.chainId !== CFG.chain.id;
     net.classList.toggle("hidden", !wrong);
@@ -1412,7 +1512,9 @@
       : "Paste the id of a Uniswap v4 position you hold on " + CFG.chain.name + " and write the " +
         "terms you would offer it on. There is no valuation service on this chain, so the figures " +
         "are yours; the vault refuses anything it cannot settle.";
-    $("lookup").textContent = CFG.api ? "Value it" : "Check it";
+    var lookupBtn = $("lookup");
+    lookupBtn.textContent = CFG.api ? "Value it" : "Check it";
+    withIcon(lookupBtn, "arrow", true);
     document.querySelector('[data-go="value"]').textContent = CFG.api ? "Value" : "Offer";
     $("tokenId").placeholder = "Position id" + ((CFG.examples || [])[0] ? ", for example " + CFG.examples[0] : "");
 

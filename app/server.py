@@ -29,8 +29,9 @@ def origins():
 CSP = "; ".join([
     "default-src 'none'",
     "script-src 'self'",
-    # One inline <style> block, and element.style set from script.
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    # The stylesheet is a file. Nothing in the page carries a style attribute, and what script sets
+    # through element.style is not what this directive governs.
+    "style-src 'self' https://fonts.googleapis.com",
     "font-src https://fonts.gstatic.com",
     "img-src 'self' data:",
     "connect-src 'self' " + " ".join(origins()),

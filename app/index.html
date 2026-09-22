@@ -4,282 +4,41 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tenure · App</title>
-<meta name="description" content="Value a Uniswap v4 position, offer it for sale-and-leaseback, or fund one.">
-<meta name="theme-color" content="#0E1726">
+<meta name="description" content="Value a Uniswap v4 position, see what a wallet holds, offer a position for sale-and-leaseback, or fund one.">
+<meta name="theme-color" content="#070C15">
 <link rel="icon" type="image/svg+xml" href="assets/logo-mark-small.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --navy-lo: #0A111D; --navy: #0E1726; --navy-hi: #1B2B48; --panel: #121D31; --panel-hi: #17243C;
-    --ink: #F4F1EA; --muted: rgba(244,241,234,.70); --faint: rgba(244,241,234,.52);
-    --line: rgba(244,241,234,.11); --line-hi: rgba(244,241,234,.22);
-    --amber: #F5B84B; --amber-hi: #FFD683; --ok: #7BE0A6; --bad: #FF8B7B;
-    --radius: 16px;
-    --ui: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
-    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-    color-scheme: dark;
-  }
-  * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  body {
-    margin: 0; padding: 0 16px 80px;
-    background: radial-gradient(1100px 700px at 70% -10%, rgba(27,43,72,.6), transparent 70%), var(--navy-lo);
-    color: var(--ink); font-family: var(--ui); font-size: 16px; line-height: 1.5;
-    -webkit-font-smoothing: antialiased; min-height: 100vh;
-  }
-  .wrap { max-width: 900px; margin: 0 auto; }
-
-  /* ---------------------------------------------------------------- development banner */
-  /* Loud on purpose. A page that looks like the real one but is pointed at a forked chain with
-     published keys is exactly the page somebody should never mistake for the real one. */
-  .dev {
-    background: rgba(245,184,75,.13); border-bottom: 1px solid var(--amber);
-    color: var(--amber-hi); font-size: 13px; font-weight: 600; letter-spacing: .04em;
-    margin: 0 -16px 0; padding: 9px 16px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
-  }
-  .dev code { font-family: var(--mono); font-weight: 400; color: var(--ink); word-break: break-all; }
-  .dev select {
-    background: var(--panel); color: var(--ink); border: 1px solid var(--line-hi);
-    border-radius: 8px; padding: 4px 8px; font-family: var(--mono); font-size: 12px;
-  }
-
-  /* ---------------------------------------------------------------- nav */
-  nav {
-    display: grid; grid-template-columns: auto auto 1fr; grid-template-areas: "logo tabs tools";
-    align-items: center; gap: 12px 16px;
-    padding: 22px 0 18px; border-bottom: 1px solid var(--line); margin-bottom: 30px;
-  }
-  .logo { grid-area: logo; }
-  .tabs { grid-area: tabs; }
-  .tools { grid-area: tools; display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
-  .logo { text-decoration: none; color: var(--ink); display: flex; align-items: center; gap: 11px; font-weight: 600; font-size: 20px;
-          letter-spacing: -.01em; margin-right: 8px; }
-  .logo img { width: 30px; height: 30px; }
-  .tabs { display: flex; gap: 2px; }
-  .tab {
-    background: none; border: none; color: var(--faint); font-family: var(--ui); font-size: 15px;
-    font-weight: 600; padding: 8px 14px; border-radius: 10px; cursor: pointer;
-  }
-  .tab:hover { color: var(--muted); background: var(--panel); }
-  .tab[aria-current="page"] { color: var(--ink); background: var(--panel-hi); }
-  .spacer { flex: 1; }
-  /* Only ever shown when the wallet is on the wrong chain, and then it is the fix, not a label. */
-  .net {
-    font-family: var(--ui); font-size: 13px; font-weight: 600; color: var(--bad);
-    background: rgba(255,139,123,.10); border: 1px solid rgba(255,139,123,.40);
-    border-radius: 999px; padding: 7px 13px;
-  }
-  .net:hover { border-color: var(--bad); }
-  .chain {
-    background: var(--panel); color: var(--ink); border: 1px solid var(--line-hi);
-    border-radius: 999px; padding: 6px 12px; font-family: var(--ui); font-size: 13px;
-    font-weight: 600; cursor: pointer;
-  }
-  .chain:hover { border-color: var(--amber); }
-
-  /* ---------------------------------------------------------------- empty state */
-  /* The first screen used to be an input and a great deal of navy. It now says what the thing does
-     and offers a position to try, and it gets out of the way the moment there is a result. */
-  #result:not(:empty) + #intro { display: none; }
-  .try { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -12px 0 34px;
-         color: var(--faint); font-size: 14px; }
-  .chip { font-family: var(--mono); font-size: 13px; font-weight: 400; padding: 6px 12px;
-          border-radius: 999px; background: var(--panel); color: var(--muted); border: 1px solid var(--line-hi); }
-  .chip:hover { color: var(--ink); border-color: var(--amber); }
-  .how { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr);
-         gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius);
-         overflow: hidden; counter-reset: step; }
-  .how li { background: var(--panel); padding: 22px 22px 24px; counter-increment: step; }
-  .how li::before { content: counter(step); display: inline-grid; place-items: center; width: 26px; height: 26px;
-                    border-radius: 50%; background: rgba(245,184,75,.14); color: var(--amber);
-                    font-size: 13px; font-weight: 700; margin-bottom: 14px; }
-  .how b { display: block; font-size: 17px; font-weight: 600; margin-bottom: 6px; }
-  .how span { color: var(--muted); font-size: 15px; }
-  .fine { color: var(--faint); font-size: 13px; margin: 18px 2px 0; }
-
-  /* ---------------------------------------------------------------- loading */
-  .loading { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 15px; }
-  .loading::before { content: ""; width: 14px; height: 14px; border-radius: 50%;
-                     border: 2px solid var(--line-hi); border-top-color: var(--amber);
-                     animation: spin .8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ---------------------------------------------------------------- type */
-  h1 { font-size: 34px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 10px; text-wrap: balance; }
-  .lede { color: var(--muted); margin: 0 0 30px; max-width: 62ch; }
-  h2 { font-size: 13px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase;
-       color: var(--amber); margin: 0 0 14px; }
-  h3 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
-
-  /* ---------------------------------------------------------------- controls */
-  .bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 28px; }
-  input[type="text"], input[type="number"] {
-    flex: 1; min-width: 150px; background: var(--panel); color: var(--ink);
-    border: 1px solid var(--line-hi); border-radius: 12px; padding: 13px 16px;
-    font-family: var(--mono); font-size: 15px;
-  }
-  input::placeholder { color: var(--faint); }
-  input:focus { outline: none; border-color: var(--amber); }
-  button {
-    font-family: var(--ui); font-size: 15px; font-weight: 600; border-radius: 12px;
-    padding: 13px 22px; cursor: pointer; border: 1px solid transparent;
-    transition: background .15s ease, border-color .15s ease, opacity .15s ease;
-  }
-  .primary { background: var(--amber); color: #15213A; }
-  .primary:hover { background: var(--amber-hi); }
-  .ghost { background: var(--panel-hi); color: var(--ink); border-color: var(--line-hi); }
-  .ghost:hover { border-color: var(--amber); }
-  .small { font-size: 14px; padding: 9px 16px; border-radius: 10px; }
-  button:disabled { opacity: .45; cursor: not-allowed; }
-  :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
-
-  /* ---------------------------------------------------------------- panels */
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-           padding: 24px 26px; margin-bottom: 18px; }
-  .panel > h2:not(:first-child) { margin-top: 26px; }
-  .note { color: var(--faint); font-size: 14px; }
-  .note.warn { color: var(--amber-hi); }
-
-  .rows { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line);
-          border-radius: 12px; overflow: hidden; }
-  .row { background: var(--panel); display: flex; justify-content: space-between; align-items: baseline;
-         gap: 18px; padding: 13px 18px; }
-  .row .k { color: var(--faint); font-size: 14px; }
-  .row .v { font-family: var(--mono); font-size: 15px; font-variant-numeric: tabular-nums;
-            text-align: right; word-break: break-all; }
-  .row .v.am { color: var(--amber); font-weight: 600; }
-
-  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line);
-           border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-top: 18px; }
-  .tile { background: var(--panel); padding: 20px; }
-  .tile .k { font-size: 12px; font-weight: 600; letter-spacing: .12em; color: var(--faint); }
-  .tile .v { font-size: 27px; font-weight: 700; letter-spacing: -.02em; margin-top: 8px;
-             font-variant-numeric: tabular-nums; }
-  .tile.am .v { color: var(--amber); }
-  .tile .u { font-size: 12px; color: var(--faint); font-weight: 600; letter-spacing: .1em; margin-top: 4px; }
-
-  .pill { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600;
-          letter-spacing: .1em; text-transform: uppercase; padding: 5px 11px; border-radius: 999px; }
-  .pill.ok { background: rgba(123,224,166,.12); color: var(--ok); }
-  .pill.no { background: rgba(255,139,123,.12); color: var(--bad); }
-  .pill.wait { background: rgba(245,184,75,.12); color: var(--amber); }
-  .pill + .pill { margin-left: 8px; }
-  .deal .head .pill + .pill { margin-left: 0; }
-  #connect, .net { white-space: nowrap; }
-
-  .msg { border-radius: 12px; padding: 14px 18px; font-size: 15px; margin-bottom: 18px; display: none; }
-  .msg.show { display: block; }
-  .msg.err { background: rgba(255,139,123,.09); border-left: 3px solid var(--bad); }
-  .msg.info { background: rgba(245,184,75,.08); border-left: 3px solid var(--amber); }
-  .msg.ok { background: rgba(123,224,166,.09); border-left: 3px solid var(--ok); }
-  .msg a { color: inherit; font-weight: 600; text-underline-offset: 3px; }
-
-  /* ---------------------------------------------------------------- deal cards */
-  .deal { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-          padding: 20px 22px; margin-bottom: 14px; }
-  .deal .head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
-  .deal .head > * { min-width: 0; }
-  /* What the financier is buying and what it pays, which a deal card used to leave out. */
-  .deal .sub { display: flex; gap: 8px 18px; flex-wrap: wrap; align-items: baseline;
-               color: var(--muted); font-size: 14px; margin-bottom: 16px; }
-  .deal .sub .pair { color: var(--ink); font-weight: 600; }
-  .deal .sub .yield b { color: var(--amber); font-weight: 600; }
-  .deal .head .spacer { flex: 1; }
-  .deal .terms { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
-  .deal .terms div { min-width: 0; }
-  .deal .terms .k { font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--faint); }
-  .deal .terms .v { font-family: var(--mono); font-size: 17px; font-variant-numeric: tabular-nums;
-                    margin-top: 3px; }
-  .deal .acts { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 14px; border-top: 1px solid var(--line); }
-  .deal .transfer { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
-  .deal .transfer input { flex: 1; min-width: 260px; font-size: 14px; padding: 10px 14px; }
-  .deal .transfer .hint { flex-basis: 100%; font-size: 13px; color: var(--faint); }
-
-  /* ---------------------------------------------------------------- forms */
-  .fields { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 18px; }
-  .field { display: flex; flex-direction: column; gap: 6px; }
-  .field label { font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
-                 color: var(--faint); }
-  .field input { flex: none; width: 100%; }
-  .field .hint { font-size: 12px; color: var(--faint); }
-  details summary { cursor: pointer; color: var(--muted); font-size: 14px; margin-bottom: 14px; }
-
-  .hidden { display: none !important; }
-
-  footer { margin-top: 40px; padding-top: 22px; border-top: 1px solid var(--line);
-           color: var(--faint); font-size: 13px; overflow-wrap: anywhere; }
-  footer a, .row .v a { color: var(--muted); text-underline-offset: 3px; }
-  .row .v a:hover, footer a:hover { color: var(--ink); }
-  .empty { display: grid; gap: 16px; justify-items: start; }
-  .empty .bar { margin: 0; }
-
-  /* On a phone the mark alone is the logo; the name would push the wallet off the row. */
-  @media (max-width: 420px) { .logo { font-size: 0; margin-right: 0; } }
-
-
-  /* ---------------------------------------------------------------- positions */
-  .pf-tools { display: flex; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
-  .pf-tools input { flex: 1 1 260px; }
-  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 22px 0 16px; }
-  .filters button { font-size: 14px; padding: 8px 14px; border-radius: 999px; background: var(--panel);
-                    border: 1px solid var(--line-hi); color: var(--muted); }
-  .filters button[aria-pressed="true"] { color: var(--ink); border-color: var(--amber); background: rgba(245,184,75,.10); }
-  .filters b { font-weight: 700; margin-left: 6px; color: var(--faint); }
-  .pf { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px; margin-bottom: 14px; }
-  .pf.bad { border-color: rgba(255,139,123,.35); }
-  .pf.warn { border-color: rgba(245,184,75,.35); }
-  .pf .head { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; }
-  .pf .pair { font-size: 19px; font-weight: 700; }
-  .pf .id { color: var(--faint); font-family: var(--mono); font-size: 13px; }
-  .pf .head .pill:first-of-type { margin-left: auto; }
-  .pf .figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 16px 0 14px; }
-  .pf .figs .k { font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--faint); text-transform: uppercase; }
-  .pf .figs .v { font-family: var(--mono); font-size: 16px; margin-top: 4px; overflow-wrap: anywhere; }
-  /* Where the price sits against the range: the one picture that says in range or not. */
-  .rangebar { position: relative; height: 8px; border-radius: 4px; background: rgba(244,241,234,.07); margin: 4px 0 6px; }
-  .rangebar .in { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: rgba(123,224,166,.45); }
-  .pf.bad .rangebar .in { background: rgba(244,241,234,.18); }
-  .rangebar .at { position: absolute; top: -5px; width: 3px; height: 18px; margin-left: -1.5px; border-radius: 2px; background: var(--amber); box-shadow: 0 0 10px rgba(245,184,75,.6); }
-  .rangelab { display: flex; justify-content: space-between; font-size: 12px; color: var(--faint); font-family: var(--mono); }
-  .findings { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 10px; }
-  .findings li { display: grid; grid-template-columns: 10px 1fr; gap: 10px; align-items: start; }
-  .findings li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; margin-top: 7px; background: var(--faint); }
-  .findings li.bad::before { background: var(--bad); } .findings li.warn::before { background: var(--amber); }
-  .findings li.ok::before { background: var(--ok); }
-  .findings b { display: block; font-size: 15px; }
-  .findings span { color: var(--muted); font-size: 14px; }
-  .pf .bar { margin: 16px 0 0; }
-  .tiles.four { grid-template-columns: repeat(4, 1fr); }
-  a.btnlink { display: inline-flex; align-items: center; text-decoration: none; }
-  @media (max-width: 720px) { .tiles.four { grid-template-columns: repeat(2, 1fr); } .pf .figs { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pf { padding: 18px 16px; } }
-
-  @media (prefers-reduced-motion: reduce) {
-    .loading::before { animation: none; }
-    button { transition: none; }
-  }
-
-  @media (max-width: 720px) {
-    /* Two rows instead of three: the mark and the wallet on top, the three screens under them. */
-    nav { grid-template-columns: 1fr auto; grid-template-areas: "logo tools" "tabs tabs"; padding-top: 16px; }
-    .tabs { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--panel);
-            border: 1px solid var(--line); border-radius: 12px; padding: 3px; }
-    .tab { text-align: center; }
-    .chain { max-width: 150px; padding: 6px 8px; text-overflow: ellipsis; }
-    .tools #connect { padding: 8px 12px; }
-    .how { grid-template-columns: 1fr; }
-    .panel { padding: 20px 18px; }
-    .deal { padding: 18px 16px; }
-    h1 { font-size: 27px; }
-    .tiles, .fields { grid-template-columns: 1fr; }
-    .deal .terms { grid-template-columns: repeat(2, 1fr); }
-    .row { flex-direction: column; gap: 4px; }
-    .row .v { text-align: left; }
-  }
-</style>
+<link rel="stylesheet" href="assets/app.css">
 </head>
 <body>
+<!-- icons:start -->
+  <svg class="sprite" aria-hidden="true">
+    <symbol id="i-no-oracle" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.4 8.3-8 9-4.6-.7-8-4-8-9V6l8-3z"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/></symbol>
+    <symbol id="i-no-fee" viewBox="0 0 24 24"><circle cx="7.5" cy="7.5" r="2.3"/><circle cx="16.5" cy="16.5" r="2.3"/><path d="M19 5L5 19"/></symbol>
+    <symbol id="i-ceiling" viewBox="0 0 24 24"><path d="M4 5h16"/><path d="M12 20V9"/><path d="M8 13l4-4 4 4"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3 12.5V4a1 1 0 0 1 1-1h8.5L21 11.5 12.5 20 3 12.5z"/><circle cx="7.8" cy="7.8" r="1.6"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4.2"/><path d="M11 12l9-9"/><path d="M16.5 6.5l3 3"/><path d="M14 9l2 2"/></symbol>
+    <symbol id="i-buyback" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.35-5.65"/><path d="M20 4v5h-5"/></symbol>
+    <symbol id="i-coins" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M16.5 7H10a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6H7.5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></symbol>
+    <symbol id="i-agent" viewBox="0 0 24 24"><rect x="4.5" y="7.5" width="15" height="12" rx="3.5"/><path d="M12 3.5v4"/><circle cx="12" cy="3" r="1"/><circle cx="9.5" cy="13" r="1.1"/><circle cx="14.5" cy="13" r="1.1"/><path d="M9.5 16.5h5"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19"/><path d="M9 7.5h6"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5"/><path d="M16 7l5 5-5 5"/><path d="M13.5 4l-3 16"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M5 16l4.5-5.5 3.5 3 6-7.5"/><path d="M15 6h4v4"/></symbol>
+    <symbol id="i-no-owner" viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.5"/><path d="M3.5 20a6.5 6.5 0 0 1 13 0"/><path d="M17 5l4 4"/><path d="M21 5l-4 4"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h13"/><path d="M16.5 14.5h1.5"/><path d="M7 6V4.5A1.5 1.5 0 0 1 8.5 3H17"/></symbol>
+    <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v6.2L4.8 18a2 2 0 0 0 1.7 3h11a2 2 0 0 0 1.7-3L14 9.2V3"/><path d="M7.5 15h9"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.66 0l3-3A4 4 0 0 0 13 5.34l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3A4 4 0 0 0 11 18.66l1-1"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.3 4.3 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.3 4.3 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
+  </svg>
+  <!-- icons:end -->
 
 <div class="dev hidden" id="dev">
   <span>DEVELOPMENT CHAIN</span>
@@ -287,24 +46,26 @@
   <label>acting as <select id="dev-account"></select></label>
 </div>
 
-<div class="wrap">
-
-  <nav>
-    <a class="logo" href="https://landing-production-abe1.up.railway.app" aria-label="Tenure home"><img src="assets/logo-mark-small.svg" alt=""> Tenure</a>
-    <div class="tabs" aria-label="Screens">
+<header class="top">
+  <div class="wrap">
+    <a class="logo" href="https://landing-production-abe1.up.railway.app" aria-label="Tenure home">
+      <img src="assets/logo-mark-small.svg" alt=""><span>Tenure</span>
+    </a>
+    <nav class="tabs" aria-label="Screens">
       <button class="tab" type="button" data-go="value">Value</button>
       <button class="tab" type="button" data-go="positions">Positions</button>
       <button class="tab" type="button" data-go="market">Market</button>
       <button class="tab" type="button" data-go="you">You</button>
-    </div>
+    </nav>
     <div class="tools">
       <select class="chain hidden" id="chain" aria-label="Chain"></select>
       <button class="net hidden" id="net" type="button"></button>
-      <button class="ghost small" id="connect" type="button">Connect wallet</button>
+      <button class="ghost small wallet" id="connect" type="button">Connect wallet</button>
     </div>
-  </nav>
+  </div>
+</header>
 
-  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+<main class="wrap">
 
   <!-- ------------------------------------------------------------ value -->
   <section data-view="value">
@@ -315,7 +76,7 @@
     <div class="bar">
       <input type="text" id="tokenId" inputmode="numeric" placeholder="Position id, for example 2908273"
              autocomplete="off" spellcheck="false">
-      <button class="primary" id="lookup" type="button">Value it</button>
+      <button class="primary" id="lookup" type="button">Value it <svg class="ico"><use href="#i-arrow"/></svg></button>
     </div>
 
     <div id="result"></div>
@@ -340,7 +101,7 @@
     <div class="pf-tools">
       <input id="pf-owner" type="text" inputmode="text" autocomplete="off" spellcheck="false"
              placeholder="Your connected wallet, or paste any address" aria-label="Wallet address">
-      <button class="ghost" id="pf-go" type="button">Look up</button>
+      <button class="ghost" id="pf-go" type="button"><svg class="ico"><use href="#i-search"/></svg> Look up</button>
     </div>
     <div id="positions"></div>
   </section>
@@ -368,8 +129,9 @@
     <a href="https://landing-production-abe1.up.railway.app/olanas">Olanas</a> ·
     <a href="https://github.com/TenureLP/tenure">Source</a>.
   </footer>
+</main>
 
-</div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
 <script src="config.js"></script>
 <script src="abi.js"></script>

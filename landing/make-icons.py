@@ -14,7 +14,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DOCS_ICONS = os.path.join(HERE, os.pardir, "docs-site", "public", "icons")
-PAGES = [os.path.join(HERE, "index.html"), os.path.join(HERE, "olanas.html")]
+PAGES = [os.path.join(HERE, "index.html"), os.path.join(HERE, "olanas.html"),
+         os.path.join(HERE, os.pardir, "app", "index.html")]
 
 ICONS = {
     "no-oracle": '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16"/>',
