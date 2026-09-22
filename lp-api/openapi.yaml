@@ -34,6 +34,8 @@ servers:
 tags:
   - name: Positions
     description: Valuation and indicative terms.
+  - name: Wallets
+    description: Every position a wallet holds, valued, with what can be said about each.
   - name: Service
     description: Liveness and machine-readable description.
 
@@ -163,6 +165,38 @@ paths:
         "502": { $ref: "#/components/responses/UpstreamError" }
         "503": { $ref: "#/components/responses/Busy" }
 
+  /v1/owner/{address}/positions:
+    get:
+      tags: [Wallets]
+      summary: Every Uniswap v4 position a wallet holds, valued and diagnosed
+      description: |
+        Rebuilds the wallet's positions from the PositionManager's transfer history, keeps the ones
+        it still holds, and values up to 40 of them. For each: what it holds, what it earns, the
+        hook of its pool and what that hook is allowed to do, and a list of findings, each a fact
+        with the options it opens. Findings never say what to do.
+
+        A wallet that has received more positions than a node returns in one answer is read from
+        its most recent transfers backwards, and `summary.complete` is false.
+      operationId: getWalletPositions
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: The wallet.
+          schema: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+          example: "0x1283b0ee815f1066dd0eb435b4999aa2ae0ea1d1"
+        - $ref: "#/components/parameters/LookbackHours"
+        - $ref: "#/components/parameters/PaymentSignature"
+      responses:
+        "200":
+          description: The wallet's positions, largest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Portfolio" }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+        "502": { $ref: "#/components/responses/UpstreamError" }
+        "503": { $ref: "#/components/responses/Busy" }
+
 components:
   parameters:
     TokenId:
@@ -239,6 +273,91 @@ components:
           example: { error: busy, message: "too many requests in flight" }
 
   schemas:
+    Portfolio:
+      type: object
+      required: [owner, summary, positions]
+      properties:
+        owner: { type: string }
+        summary:
+          type: object
+          properties:
+            positions: { type: integer, description: Positions the wallet holds now. }
+            complete: { type: boolean, description: False when only the most recent could be listed. }
+            valued: { type: integer }
+            inRange: { type: integer }
+            outOfRange: { type: integer }
+            empty: { type: integer }
+            valueUSDG: { type: number, description: Pairs that include USDG only. }
+            uncollectedFeesUSDG: { type: number }
+            feesPerDayUSDG: { type: [number, "null"] }
+            attention: { type: integer, description: Positions with at least one warning. }
+            note: { type: string }
+        positions:
+          type: array
+          items: { $ref: "#/components/schemas/WalletPosition" }
+        truncated:
+          type: array
+          description: Held but not valued in this answer, by token id.
+          items: { type: integer }
+        disclaimer: { type: string }
+    WalletPosition:
+      type: object
+      properties:
+        tokenId: { type: integer }
+        pool:
+          type: object
+          properties:
+            poolId: { type: string }
+            pair: { type: string, example: "ETH / USDG" }
+            token0: { $ref: "#/components/schemas/Token" }
+            token1: { $ref: "#/components/schemas/Token" }
+            feePips: { type: integer }
+            hooks: { $ref: "#/components/schemas/Hook" }
+        position: { type: object }
+        valueUSDG: { type: [object, "null"] }
+        uncollectedFees: { type: object }
+        earning:
+          type: object
+          properties:
+            feesPerDayUSDG: { type: [number, "null"] }
+            feeAprPercent: { type: [number, "null"] }
+            source: { type: [string, "null"] }
+            lowConfidence: { type: [boolean, "null"] }
+        lease:
+          type: object
+          description: Indicative Tenure terms, or why there are none.
+        findings:
+          type: array
+          items: { $ref: "#/components/schemas/Finding" }
+    Hook:
+      type: object
+      properties:
+        address: { type: [string, "null"], description: Null when the pool has no hook. }
+        permissions:
+          type: array
+          description: Read from the low 14 bits of the hook's address, where v4 records what it may do.
+          items: { type: string }
+        dynamicFee: { type: boolean }
+        effects:
+          type: array
+          items:
+            type: object
+            properties:
+              level: { type: string, enum: [info, warn, bad] }
+              text: { type: string }
+    Finding:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [empty, out-of-range, near-edge, fees-waiting, low-yield, hook, subscriber, tenure]
+        level: { type: string, enum: [bad, warn, ok, info] }
+        title: { type: string }
+        detail: { type: string }
+        options:
+          type: array
+          description: What the finding opens, as identifiers. Never an instruction.
+          items: { type: string }
     Health:
       type: object
       required: [ok, version, chainId, paywall]

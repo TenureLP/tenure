@@ -9,6 +9,8 @@ Routes
   GET     /v1/position/<tokenId>            valuation        (paid when the paywall is enabled)
   GET     /v1/position/<tokenId>/quote      valuation + indicative sale-and-leaseback terms (paid)
       ?term=7&haircut=0.2&rentShare=0.5&lookbackHours=24
+  GET     /v1/owner/<address>/positions     every position a wallet holds, valued and diagnosed (paid)
+      ?lookbackHours=24
 """
 
 import json
@@ -22,10 +24,14 @@ from urllib.parse import parse_qs, urlparse
 
 from . import __version__
 from .paywall import Paywall
+from .portfolio import portfolio
 from .rpc import Rpc, UpstreamError
 from .valuation import CHAIN_ID, RPC_URL, PositionNotFound, quote, value_position
 
 _ROUTE = re.compile(r"^/v1/position/(\d{1,78})(/quote)?/?$")
+_OWNER_ROUTE = re.compile(r"^/v1/owner/(0x[0-9a-fA-F]{40})/positions/?$")
+_PORTFOLIO_TTL = 30.0  # a wallet is dozens of valuations; nobody's positions change twice a minute
+_PORTFOLIO_BUDGET = 40.0
 _MAX_TOKEN_ID = 2**256 - 1
 _CACHE_TTL = 3.0
 _CACHE_MAX = 5000
@@ -83,7 +89,7 @@ def _num(qs, key, default, lo, hi, cast=float):
     return max(lo, min(hi, v))
 
 
-def _cached(key, build):
+def _cached(key, build, ttl=_CACHE_TTL):
     """One valuation per key at a time. Without this, twenty people opening the same position
     produce twenty identical round trips to the node and rate-limit us against ourselves.
 
@@ -94,7 +100,7 @@ def _cached(key, build):
     """
     with _cache_lock:
         hit = _cache.get(key)
-        if hit and time.time() - hit[0] < _CACHE_TTL:
+        if hit and time.time() - hit[0] < ttl:
             _cache.move_to_end(key)
             return hit[1]
         flight = _inflight.get(key)
@@ -104,7 +110,7 @@ def _cached(key, build):
             _inflight[key] = flight
 
     if not leader:
-        if not flight.event.wait(timeout=_BUILD_BUDGET + 5):
+        if not flight.event.wait(timeout=max(_BUILD_BUDGET, _PORTFOLIO_BUDGET) + 5):
             raise UpstreamError("timed out waiting for a valuation already in flight")
         if flight.exc is not None:
             raise flight.exc
@@ -138,7 +144,7 @@ def make_handler(rpc: Rpc, paywall: Paywall):
         timeout = 15
 
         def _send(self, status: int, body: dict, extra_headers=None):
-            self._send_raw(status, json.dumps(body, indent=2).encode(), "application/json")
+            self._send_raw(status, json.dumps(body, indent=2).encode(), "application/json", extra_headers)
 
         def _send_raw(self, status: int, raw: bytes, content_type: str, extra_headers=None):
             try:
@@ -198,6 +204,18 @@ def make_handler(rpc: Rpc, paywall: Paywall):
                     return self._send(404, {"error": "not_found"})
                 return self._send_raw(200, body, spec[1])
 
+            owner = _OWNER_ROUTE.match(url.path)
+            if owner:
+                if not _slots.acquire(blocking=False):
+                    return self._send(503, {"error": "busy", "message": "too many requests in flight"}, {"retry-after": "2"})
+                try:
+                    rpc.set_deadline(_PORTFOLIO_BUDGET)
+                    self._serve_owner(url, owner.group(1).lower())
+                finally:
+                    rpc.clear_deadline()
+                    _slots.release()
+                return
+
             m = _ROUTE.match(url.path)
             if not m:
                 return self._send(404, {"error": "not_found"})
@@ -217,6 +235,45 @@ def make_handler(rpc: Rpc, paywall: Paywall):
             finally:
                 rpc.clear_deadline()
                 _slots.release()
+
+        def _pay(self, resource):
+            """None when the request may proceed, with the receipt headers and what was spent; or
+            the response already sent when it may not."""
+            if not paywall.enabled:
+                return {}, None, False
+            host = self.headers.get("Host") or ""
+            challenge = paywall.challenge(resource, f"http://{host}" if host else "")
+            required = {"PAYMENT-REQUIRED": paywall.encode(challenge), "WWW-Authenticate": "x402"}
+            try:
+                proof, err = paywall.parse_proof(self.headers)
+                if err or proof is None:
+                    if err:
+                        challenge["reason"] = err
+                    self._send(402, challenge, required)
+                    return None, None, True
+                ok, reason, receipt = paywall.verify(proof, resource)
+            except Exception:
+                self._send(402, dict(challenge, reason="the proof could not be read"), required)
+                return None, None, True
+            if not ok:
+                challenge["reason"] = reason
+                self._send(402, challenge, required)
+                return None, None, True
+            return {"PAYMENT-RESPONSE": paywall.encode(receipt)}, (proof["txHash"], proof["payer"], resource), False
+
+        def _serve_owner(self, url, owner):
+            qs = parse_qs(url.query)
+            lookback = int(_num(qs, "lookbackHours", 24.0, 0.0, 720.0))
+            paid_headers, spent, answered = self._pay(f"{url.path}?lookbackHours={lookback}")
+            if answered:
+                return
+            try:
+                body = _cached(("owner", owner, lookback), lambda: portfolio(rpc, owner, lookback), _PORTFOLIO_TTL)
+            except Exception:
+                if spent:
+                    paywall.release(*spent)
+                return self._send(502, {"error": "upstream_error", "message": "the chain could not be read right now"})
+            return self._send(200, body, paid_headers)
 
         def _serve(self, url, m, token_id):
             qs = parse_qs(url.query)

@@ -168,14 +168,15 @@ class Rpc:
 
     # ------------------------------------------------------------------ transport
 
-    def _post_once(self, payload, endpoint):
+    def _post_once(self, payload, endpoint, timeout=None):
         headers = {"content-type": "application/json", "user-agent": "lpval/0.2"}
         headers.update(endpoint.headers)
         req = urllib.request.Request(endpoint.url, data=json.dumps(payload).encode(), headers=headers)
         left = self._remaining()
         if left is not None and left <= 0:
             raise UpstreamError("deadline exceeded before the request was sent")
-        timeout = self.timeout if left is None else min(self.timeout, left)
+        base = timeout or self.timeout
+        timeout = base if left is None else min(base, left)
         with self._opener.open(req, timeout=timeout) as resp:
             body = resp.read(MAX_BODY + 1)
         if len(body) > MAX_BODY:
@@ -185,18 +186,20 @@ class Rpc:
         except ValueError as exc:
             raise UpstreamError(self.scrub("response was not JSON: " + str(exc))) from exc
 
-    def _post(self, payload, endpoints=None):
+    def _post(self, payload, endpoints=None, timeout=None, retries=None):
         """Retries idempotent reads. Every JSON-RPC method this client sends is a read."""
         eps = list(endpoints or self.endpoints)
         last = None
         dead = set()  # endpoints that answered something no repetition will fix
-        attempts = max(RETRIES, len(eps))
+        attempts = retries or max(RETRIES, len(eps))
         for attempt in range(attempts):
             endpoint = eps[attempt % len(eps)]
             if endpoint.label in dead:
                 continue
             try:
-                return self._post_once(payload, endpoint)
+                if timeout is None:
+                    return self._post_once(payload, endpoint)
+                return self._post_once(payload, endpoint, timeout)
             except urllib.error.HTTPError as exc:
                 last = UpstreamError("HTTP " + str(exc.code) + " from " + endpoint.label)
                 if exc.code not in RETRYABLE_HTTP:
@@ -222,6 +225,22 @@ class Rpc:
         raise last or UpstreamError("upstream unavailable")
 
     # ------------------------------------------------------------------ calls
+
+    def remaining(self):
+        """Seconds left in this thread's budget, or None when it has none. Worker threads start
+        without one, so a caller fanning work out hands its own remainder to each of them."""
+        return self._remaining()
+
+    def request_on(self, method, params, endpoint, timeout=None):
+        """One method on one named endpoint, one attempt, no failover. For the calls providers
+        disagree about, where the caller decides what a refusal from one endpoint means."""
+        out = self._post({"jsonrpc": "2.0", "id": self._next_id(), "method": method, "params": params},
+                         [endpoint], timeout=timeout, retries=1)
+        if not isinstance(out, dict):
+            raise UpstreamError("expected a single JSON-RPC response")
+        if "error" in out:
+            raise RpcError(self.scrub(method + ": " + str(out["error"])))
+        return out.get("result")
 
     def request(self, method, params):
         out = self._post({"jsonrpc": "2.0", "id": self._next_id(), "method": method, "params": params})
