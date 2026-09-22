@@ -63,7 +63,8 @@ body {
 
 .vp-doc h1 { letter-spacing: -.02em; }
 .vp-doc h2 { letter-spacing: -.01em; border-top-color: rgba(244, 241, 234, .11); }
-.vp-doc table { display: table; width: 100%; }
+/* Full width on a desktop; on a phone VitePress's own rule applies, and a wide table scrolls in its box. */
+@media (min-width: 960px) { .vp-doc table { display: table; width: 100%; } }
 .vp-doc th { background: #121D31; }
 .vp-doc tr:nth-child(2n) { background: rgba(18, 29, 49, .45); }
 .vp-doc td code, .vp-doc th code { white-space: nowrap; }

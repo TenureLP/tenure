@@ -86,6 +86,8 @@ cd lp-api && ./run.sh position 2908278 --quote
 
 ## Documentation
 
+The full documentation is a site: **[docs-production-3405.up.railway.app](https://docs-production-3405.up.railway.app)**, built from [`docs-site/`](docs-site). The app is live at **[app-production-7810.up.railway.app](https://app-production-7810.up.railway.app)**. The documents below go deeper on one subject each.
+
 | Document | What it answers |
 |---|---|
 | [Specification](lease-vault/docs/SPEC.md) | The lifecycle, the economics of a deal, how rent and freezes work, the compliance analysis, the regulatory context |
