@@ -76,66 +76,22 @@ stays on loopback.
 
 ## 2. The landing page
 
-A second service from the same repository with **root directory `landing`**. Signups have to land
-somewhere durable, and there are two ways to arrange that. **Without either, the form answers 503**
-— deliberately, because an endpoint that cannot deliver an address should refuse it rather than
-drop it quietly.
+A second service from the same repository with **root directory `landing`**. Two static pages, the
+home page and `/olanas`, served by `server.py` with a strict content security policy: no script at
+all, no inline style, nothing framed. No variables to set.
 
-### A volume, and no third party
-
-The default here. Nobody but you ever sees the addresses. Attach a volume, mount it at `/data`, and
-set:
-
-| Variable | Value |
-|---|---|
-| `WAITLIST_DATA_DIR` | `/data` — the mount point, used to prove the file is durable |
-| `WAITLIST_FILE` | `/data/waitlist.jsonl` |
-
-The service refuses to start if `WAITLIST_FILE` sits outside `WAITLIST_DATA_DIR`, for the same
-reason the paywall refuses an ephemeral ledger: a page that collects onto a disk about to be
-discarded looks like it works, and the list is empty when it is finally read.
-
-### Reading the list
-
-Nothing on the public page exposes it, so there is no route to guard and no token to leak. Both
-ways in go over Railway's SSH, which needs a key registered **once**:
+The landing used to collect waitlist signups onto a volume. That form is gone, and the endpoint
+with it. Anything collected before it closed is still on `landing-volume`, untouched: registering
+an SSH key once (from an interactive terminal if the key has a passphrase) lets you download it.
 
 ```bash
 railway ssh keys add
-```
-
-Run that from an interactive terminal if your key has a passphrase — it cannot be entered otherwise,
-and an agent or a script will fail with "No loadable SSH keys found". Then either download the file:
-
-```bash
 railway volume files -v landing-volume download /waitlist.jsonl ./waitlist.jsonl
 python3 landing/read_waitlist.py < waitlist.jsonl
 ```
 
-or read it in place:
-
-```bash
-railway ssh --service landing cat /data/waitlist.jsonl | python3 landing/read_waitlist.py
-```
-
-`--count` prints just the number, `--emails` just the addresses. Duplicates are removed on the way
-out rather than on the way in, so the timestamp shown is when that person first joined.
-`railway volume files browse /` is an interactive file browser over the same volume.
-
-### Or a webhook
-
-| Variable | Value |
-|---|---|
-| `WAITLIST_WEBHOOK_URL` | where signups are POSTed |
-
-Any URL receives `{"email", "role", "source", "ts"}`. A Discord webhook URL is detected and gets a
-Discord-shaped message instead; the address is mangled before it goes into that message, so a
-signup cannot render as a link in the channel. This hands the addresses to whoever runs that
-endpoint, which is the trade for getting a notification pushed to you.
-
-The webhook takes precedence when both are set. The server prints where signups go on the line it
-logs at boot, so a misconfigured deployment is visible without having to sign up to find out.
-`WAITLIST_FILE` alone, with no `PORT`, is the local-development path.
+Keep the file out of this repository: those are other people's addresses. Once it is read, the
+volume and the two `WAITLIST_*` variables can be deleted from the service.
 
 ## What is live now
 

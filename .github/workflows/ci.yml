@@ -33,34 +33,9 @@ jobs:
         working-directory: lp-api
         run: python -m unittest discover -s tests
       - name: every module compiles
-        run: python -m compileall -q lp-api/lpval landing/api landing/dev_server.py landing/server.py landing/read_waitlist.py
-      - name: waitlist endpoint
-        run: |
-          python - <<'PY'
-          import os, sys, tempfile
-          sys.path.insert(0, "landing")
-          os.environ["WAITLIST_FILE"] = os.path.join(tempfile.mkdtemp(), "w.jsonl")
-          from api.waitlist import process, read_length
-          assert process(b'{"email":"a@b.co"}')[0] == 200
-          assert process(b'{"email":"nope"}')[0] == 400
-          assert process(b'{')[0] == 400
-          assert process(b'{"email":"a@b.co","role":[]}')[0] == 200
-          assert read_length("-1") is None and read_length("abc") is None
-          print("ok")
-          PY
-      - name: an unconfigured deployment refuses signups
-        run: |
-          python - <<'PY'
-          import os, sys
-          sys.path.insert(0, "landing")
-          for var in ("WAITLIST_FILE", "WAITLIST_WEBHOOK_URL", "VERCEL"):
-              os.environ.pop(var, None)
-          import server  # the production entry point, which imports dev_server for its handler
-          from api.waitlist import process
-          assert "WAITLIST_FILE" not in os.environ, "importing the server configured delivery"
-          assert process(b'{"email":"a@b.co"}')[0] == 503, "accepted a signup with nowhere to put it"
-          print("ok")
-          PY
+        run: python -m compileall -q lp-api/lpval landing/dev_server.py landing/server.py landing/read_waitlist.py app/server.py docs-site/server.py
+      - name: landing and app servers refuse everything but their pages
+        run: python check-servers.py
 
 # The fork tests are deliberately absent: they need a live node, and a chain outage is not a reason
 # to mark a commit broken. Run them with lease-vault/fork-test.sh before anything is deployed.

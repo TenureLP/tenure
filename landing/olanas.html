@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tenure on Olanas · A valuation API agents pay for per request</title>
+  <meta name="description" content="Tenure's position valuation is listed on Olanas, the API launchpad on Robinhood Chain. An agent running the Olanas Payments MCP can price any Uniswap v4 position and get sale-and-leaseback terms for 0.003 USDG a call.">
+  <meta name="theme-color" content="#0E1726">
+  <meta property="og:title" content="Tenure on Olanas">
+  <meta property="og:description" content="Price any Uniswap v4 position on Robinhood Chain from an agent, 0.003 USDG a call, no account, no API key.">
+  <meta property="og:url" content="https://landing-production-abe1.up.railway.app/olanas">
+  <meta property="og:image" content="https://landing-production-abe1.up.railway.app/assets/banner-1500x500.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/svg+xml" href="/assets/logo-mark-small.svg">
+  <link rel="apple-touch-icon" href="/assets/logo-mark-512.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap">
+      <a class="brand" href="/" aria-label="Tenure home"><img src="/assets/logo-nav.svg" alt="Tenure" width="196" height="64"></a>
+      <nav aria-label="Main">
+        <a href="/#how">How it works</a>
+        <a href="/olanas" aria-current="page">Olanas</a>
+        <a class="out" href="https://docs-production-3405.up.railway.app">Docs</a>
+        <a class="out" href="https://github.com/TenureLP/tenure">GitHub</a>
+        <a class="btn" href="https://app-production-7810.up.railway.app">Open the app</a>
+      </nav>
+      <details class="menu">
+        <summary aria-label="Menu"><span></span></summary>
+        <div class="sheet">
+          <a href="https://app-production-7810.up.railway.app">Open the app <small>Value a position, list it, fund one</small></a>
+          <a href="https://docs-production-3405.up.railway.app">Docs <small>How a deal works, the contract, the API</small></a>
+          <a href="/#how">How it works <small>Three acts, one transaction each</small></a>
+          <a href="/olanas">Olanas <small>Agents that pay for our API per request</small></a>
+          <a href="https://github.com/TenureLP/tenure">GitHub <small>Every line of it</small></a>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <p class="eyebrow">Tenure × Olanas</p>
+        <h1>Let an agent value<br>your position. <span>0.003 USDG a call.</span></h1>
+        <p class="lede">The valuation behind the Tenure app is listed on <a href="https://olanas.xyz">Olanas</a>, the API launchpad on Robinhood Chain. An agent running the Olanas Payments MCP finds it, pays for it and reads the answer, with no account, no API key and no wallet prompt per call.</p>
+        <div class="actions">
+          <a class="btn" href="https://olanas.xyz/services/tenure-position-valuation">See the listing on Olanas</a>
+          <a class="btn ghost" href="https://docs-production-3405.up.railway.app/api/agents">Read the integration guide</a>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <p class="eyebrow">What an agent gets</p>
+          <h2>One call. Everything a deal needs.</h2>
+          <p class="lede">Give it a Uniswap v4 position id on Robinhood Chain. It answers with what the position is worth, what it really earns, and terms it could be sold and leased back on. It only reads: nothing is signed and nothing is sent on the agent's behalf.</p>
+        </div>
+        <div class="grid3">
+          <article class="card">
+            <p class="step">HOLDS</p>
+            <h3>What is in it</h3>
+            <p>The pool, both tokens, the range, whether it is in range, the exact amount of each token and the fees not yet collected, valued in USDG.</p>
+          </article>
+          <article class="card">
+            <p class="step">EARNS</p>
+            <h3>What it really makes</h3>
+            <p>Fees per day and fee APR, measured from the pool's own accumulators over a day of chain history, with the source and a confidence flag. Not a model.</p>
+          </article>
+          <article class="card">
+            <p class="step">RAISES</p>
+            <h3>What it could be sold for</h3>
+            <p>Indicative sale price, buyback and rent for a lease of the length the agent asks for, ready to list on the Tenure vault as they are, or to negotiate from.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <p class="eyebrow">How it works</p>
+          <h2>From install to answer.</h2>
+        </div>
+        <div class="grid3">
+          <article class="card">
+            <p class="step">01 · INSTALL</p>
+            <h3>The Olanas Payments MCP</h3>
+            <p>A local MCP server and companion wallet by Olanas. It creates a key on your own machine, encrypts it locally, and registers itself with Claude, Codex, Gemini or any MCP client. Their README has the one command.</p>
+            <a class="go" href="https://github.com/olanass/web/tree/olanas-payments-mcp">Olanas Payments MCP →</a>
+          </article>
+          <article class="card">
+            <p class="step">02 · BOUND IT</p>
+            <h3>A spending session you set</h3>
+            <p>Fund the wallet, then enable a session in the companion: a per-call cap, a total budget and an expiry. Nothing is spent until you do, and nothing beyond what you allow.</p>
+          </article>
+          <article class="card">
+            <p class="step">03 · ASK</p>
+            <h3>“Value position 3093793”</h3>
+            <p>The agent searches the launchpad, finds Tenure position valuation, pays 0.003 USDG through the Olanas gateway and gets the valuation back.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <p class="eyebrow">The listing</p>
+          <h2>Live on the launchpad.</h2>
+        </div>
+        <div class="tablewrap">
+          <table class="kv">
+            <tbody>
+              <tr><th>Service</th><td>Tenure position valuation</td></tr>
+              <tr><th>Page</th><td><a href="https://olanas.xyz/services/tenure-position-valuation">olanas.xyz/services/tenure-position-valuation</a></td></tr>
+              <tr><th>Gateway</th><td><code>https://olanas.xyz/x402/tenure-position-valuation</code></td></tr>
+              <tr><th>Price</th><td>0.003 USDG per request</td></tr>
+              <tr><th>Method</th><td><code>GET</code> only. It reads, it never writes.</td></tr>
+              <tr><th>Chain</th><td>Robinhood Chain, 4663</td></tr>
+              <tr><th>Description for agents</th><td>An OpenAPI 3.1 document, so an agent understands the inputs and the answer without a human in the loop.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <p class="eyebrow">Same rails</p>
+          <h2>Built for the same chain, the same way.</h2>
+          <p class="lede">Nothing had to be adapted. Tenure's API already spoke the payment scheme Olanas uses, on the chain Olanas runs on.</p>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th></th><th>Olanas</th><th>Tenure's API</th></tr></thead>
+            <tbody>
+              <tr><th>Chain</th><td>Robinhood Chain, 4663 and testnet 46630</td><td>the same</td></tr>
+              <tr><th>Payment scheme</th><td><code>onchain-tx</code></td><td><code>onchain-tx</code></td></tr>
+              <tr><th>Challenge</th><td>HTTP 402</td><td>HTTP 402, as an x402 v2 envelope</td></tr>
+              <tr><th>Proof header</th><td><code>PAYMENT-SIGNATURE</code></td><td>the same</td></tr>
+              <tr><th>Receipt header</th><td><code>PAYMENT-RESPONSE</code></td><td>the same</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <p class="eyebrow">What we do with Olanas</p>
+          <h2>A service on their launchpad, and code in their repository.</h2>
+        </div>
+        <div class="grid2">
+          <article class="card">
+            <h3>We list on it</h3>
+            <ul class="ticks">
+              <li>Tenure position valuation was one of the first services published on the launchpad.</li>
+              <li>It ships with its OpenAPI document, which Olanas republishes pointing at their gateway.</li>
+              <li>Its gateway answers a standard x402 version 2 challenge: <code>onchain-tx</code>, <code>eip155:4663</code>, 0.003 USDG.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>We contribute to it</h3>
+            <ul class="ticks">
+              <li>Olanas is open source. We read the code we depend on.</li>
+              <li>When we find something worth fixing, we send the fix upstream as a pull request, under the Tenure name.</li>
+              <li>Anything sensitive goes to their team privately first, never into a public thread.</li>
+            </ul>
+            <a class="go" href="https://github.com/olanass/web">olanass/web on GitHub →</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <p class="eyebrow">Without Olanas</p>
+          <h2>Or call it directly, for free.</h2>
+          <p class="lede">The public instance runs free today. Anyone can call it, no payment, no key.</p>
+        </div>
+        <pre><code>curl https://api-production-9e87.up.railway.app/v1/position/3093793/quote</code></pre>
+        <div class="actions more">
+          <a class="btn ghost" href="https://docs-production-3405.up.railway.app/api/">API reference</a>
+          <a class="btn ghost" href="https://api-production-9e87.up.railway.app/openapi.yaml">OpenAPI document</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta">
+      <div class="wrap">
+        <p class="eyebrow">Then, the deal</p>
+        <h2 class="cta-title">An answer an agent can act on.</h2>
+        <p class="lede">The terms in a quote are the terms the Tenure vault takes. What an agent values, the app can list.</p>
+        <div class="actions">
+          <a class="btn" href="https://app-production-7810.up.railway.app">Open the app</a>
+          <a class="btn ghost" href="https://docs-production-3405.up.railway.app/guide/how-a-deal-works">How a deal works</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">
+      <div class="cols">
+        <div><img src="/assets/logo-nav.svg" alt="Tenure" width="196" height="64"></div>
+        <div>
+          <h4>Product</h4>
+          <ul>
+            <li><a href="https://app-production-7810.up.railway.app">App</a></li>
+            <li><a href="https://docs-production-3405.up.railway.app/guide/testnet">Testnet</a></li>
+            <li><a href="https://docs-production-3405.up.railway.app/guide/how-a-deal-works">How a deal works</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Build</h4>
+          <ul>
+            <li><a href="https://docs-production-3405.up.railway.app">Docs</a></li>
+            <li><a href="https://docs-production-3405.up.railway.app/contracts/lease-vault">Contract reference</a></li>
+            <li><a href="https://docs-production-3405.up.railway.app/api/">Valuation API</a></li>
+            <li><a href="/olanas">Olanas</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Source</h4>
+          <ul>
+            <li><a href="https://github.com/TenureLP/tenure">GitHub</a></li>
+            <li><a href="https://docs-production-3405.up.railway.app/concepts/guarantees">What is guaranteed</a></li>
+          </ul>
+        </div>
+      </div>
+      <p class="legal">Tenure is software under development. Nothing on this page is an offer, a solicitation, or financial advice. Olanas is an independent project; Tenure is not affiliated with it, with Uniswap Labs or with Robinhood.</p>
+    </div>
+  </footer>
+</body>
+</html>

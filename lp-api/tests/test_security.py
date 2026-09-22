@@ -521,60 +521,8 @@ class FeeWindowTest(unittest.TestCase):
         self.assertEqual(widened, [])
 
 
-class WaitlistTest(unittest.TestCase):
-    def setUp(self):
-        from api import waitlist
-
-        self.waitlist = waitlist
-        os.environ["WAITLIST_FILE"] = os.path.join(tempfile.mkdtemp(), "w.jsonl")
-        os.environ.pop("WAITLIST_WEBHOOK_URL", None)
-        os.environ.pop("VERCEL", None)
-
-    def test_negative_content_length_is_refused(self):
-        self.assertIsNone(self.waitlist.read_length("-1"))
-        self.assertIsNone(self.waitlist.read_length("abc"))
-        self.assertIsNone(self.waitlist.read_length(str(self.waitlist.MAX_BODY + 1)))
-        self.assertEqual(self.waitlist.read_length("10"), 10)
-
-    def test_type_confusion_does_not_crash(self):
-        for body in [b'{"email":"a@b.co","role":[]}', b'{"email":"a@b.co","source":{}}']:
-            status, _ = self.waitlist.process(body)
-            self.assertEqual(status, 200)
-
-    def test_no_enumeration_oracle(self):
-        first = self.waitlist.process(b'{"email":"a@b.co"}')
-        second = self.waitlist.process(b'{"email":"a@b.co"}')
-        self.assertEqual(first, second)
-        self.assertNotIn("duplicate", json.dumps(second[1]))
-
-    def test_chat_injection_is_stripped(self):
-        cleaned = self.waitlist._safe("x`[click](https://evil.tld)`y@z.co")
-        for ch in "`[]()":
-            self.assertNotIn(ch, cleaned)
-
-    def test_a_file_on_an_ephemeral_disk_is_not_durable(self):
-        """Same rule as the payment ledger: on a platform that replaces containers, the file has to
-        sit under a mount the operator declared. A signup collected onto a disk that is about to be
-        discarded is worse than one refused, because the page looks like it worked."""
-        import server
-
-        for var in ("PORT", "WAITLIST_DATA_DIR", "WAITLIST_FILE"):
-            os.environ.pop(var, None)
-
-        os.environ["WAITLIST_FILE"] = "/app/waitlist.jsonl"
-        self.assertTrue(server.storage_is_durable(), "no PORT means local, where any path is fine")
-
-        os.environ["PORT"] = "8080"
-        self.assertFalse(server.storage_is_durable(), "a container path with no declared volume")
-
-        os.environ["WAITLIST_DATA_DIR"] = "/data"
-        self.assertFalse(server.storage_is_durable(), "declared volume, but the file is outside it")
-
-        os.environ["WAITLIST_FILE"] = "/data/waitlist.jsonl"
-        self.assertTrue(server.storage_is_durable())
-
-        for var in ("PORT", "WAITLIST_DATA_DIR", "WAITLIST_FILE"):
-            os.environ.pop(var, None)
+class WaitlistReaderTest(unittest.TestCase):
+    """The signup form is gone; the reader stays, for the list collected before it closed."""
 
     def test_reader_deduplicates_and_survives_a_half_written_line(self):
         import io
@@ -593,14 +541,6 @@ class WaitlistTest(unittest.TestCase):
         self.assertEqual([r["email"] for r in rows], ["a@b.co", "c@d.co"])
         # The first signup wins, so the timestamp is when they actually joined.
         self.assertEqual(rows[0]["ts"], 100)
-
-    def test_unconfigured_refuses_instead_of_dropping(self):
-        """With nowhere to deliver, the endpoint must say so. It used to default to a file in the
-        working directory, which on a container is erased at the next deploy: the signup was
-        answered 200 and then lost."""
-        os.environ.pop("WAITLIST_FILE", None)
-        status, _ = self.waitlist.process(b'{"email":"a@b.co"}')
-        self.assertEqual(status, 503)
 
 
 class EnvelopeTest(unittest.TestCase):
@@ -740,14 +680,6 @@ class RpcErrorShapeTest(unittest.TestCase):
         self.assertIs(Rpc._item_result(None), UNAVAILABLE)
         self.assertEqual(Rpc._item_result({"result": "0x01"}), "0x01")
 
-
-class ChatInjectionTest(unittest.TestCase):
-    def test_a_bare_url_cannot_render_as_a_link(self):
-        from api import waitlist
-
-        cleaned = waitlist._safe("https://evil.example/?x=y@z.co")
-        for ch in ":/?=&@":
-            self.assertNotIn(ch, cleaned)
 
 if __name__ == "__main__":
     unittest.main()

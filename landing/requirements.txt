@@ -1,4 +1,4 @@
-# No dependencies. The page is static and the signup endpoint uses only the
+# No dependencies. The pages are static and the server uses only the
 # Python standard library.
 #
 # The file is here because build systems detect a Python project by its

@@ -1,4 +1,5 @@
-"""Reads the waitlist and prints it. Nothing is written back.
+"""Reads the waitlist collected before the signup form was removed, and prints it. Nothing is
+written back.
 
 The endpoint appends every signup and never checks for a duplicate on the way in: re-reading the
 whole file per request is linear in its size, and the check-then-append it would need is a race

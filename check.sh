@@ -20,7 +20,7 @@ step "Python: lp-api tests"
 (cd lp-api && python3 -m unittest discover -s tests -q); note $?
 
 step "Python: syntax of every module"
-python3 -m compileall -q lp-api/lpval landing/api landing/dev_server.py landing/server.py \
+python3 -m compileall -q lp-api/lpval landing/dev_server.py landing/server.py \
   landing/read_waitlist.py app/server.py docs-site/server.py >/dev/null; note $?
 
 step "API: the description matches the service, and both spellings match each other"
@@ -79,82 +79,9 @@ step "App: abi.js is not stale"
 # every button on the page is calling something else.
 (cd app && python3 make-abi-js.py --check); note $?
 
-step "Landing: waitlist endpoint logic"
-python3 - <<'PY'
-import sys, os, json, tempfile
-sys.path.insert(0, "landing")
-os.environ["WAITLIST_FILE"] = os.path.join(tempfile.mkdtemp(), "w.jsonl")
-os.environ.pop("WAITLIST_WEBHOOK_URL", None)
-os.environ.pop("VERCEL", None)
-from api.waitlist import process
-cases = [
-    (b'{"email":"a@b.co"}', 200), (b'{"email":"a@b.co"}', 200),      # second is the duplicate
-    (b'{"email":"nope"}', 400), (b'{', 400),
-    (b'{"email":"a@b.co","company":"bot"}', 200),                      # honeypot
-]
-for body, want in cases:
-    got, _ = process(body)
-    assert got == want, (body, got, want)
-print("   5 cases ok")
-PY
-note $?
+step "Landing and app: each server serves its pages and nothing beside them"
+python3 check-servers.py; note $?
 
-step "Landing: an unconfigured deployment refuses signups"
-# A fresh interpreter, because what is being tested is what importing the production entry point
-# does to the environment. This is how a live page came to answer 200 and lose the address:
-# server.py imports dev_server for its handler, and dev_server set a writable path at import time.
-python3 - <<'PY'
-import os, sys
-sys.path.insert(0, "landing")
-for var in ("WAITLIST_FILE", "WAITLIST_WEBHOOK_URL", "VERCEL"):
-    os.environ.pop(var, None)
-import server  # noqa: F401  the production entry point
-from api.waitlist import process
-
-assert "WAITLIST_FILE" not in os.environ, "importing the server configured delivery by itself"
-status, _ = process(b'{"email":"a@b.co"}')
-assert status == 503, f"accepted a signup with nowhere to put it (got {status})"
-print("   refuses with 503, and the import sets nothing")
-PY
-note $?
-
-step "App: the production server serves the page and nothing beside it"
-# The app directory holds a deploy script, a dev chain launcher and the tests. The server is the
-# only thing between them and the internet, so its list is checked by asking for them, both ways.
-python3 - <<'PY'
-import sys, threading, urllib.request, urllib.error
-sys.path.insert(0, "app")
-from http.server import ThreadingHTTPServer
-from functools import partial
-import server
-server.ProdHandler.log_message = lambda *a: None  # the 404s are the point, not news
-
-httpd = ThreadingHTTPServer(("127.0.0.1", 0), partial(server.ProdHandler, directory=server.HERE))
-threading.Thread(target=httpd.serve_forever, daemon=True).start()
-base = "http://127.0.0.1:%d" % httpd.server_address[1]
-
-def status(path, method="GET"):
-    try:
-        with urllib.request.urlopen(urllib.request.Request(base + path, method=method)) as r:
-            return r.status, r.headers
-    except urllib.error.HTTPError as e:
-        return e.code, e.headers
-
-for path in ("/", "/index.html", "/app.js", "/config.js", "/assets/logo-mark-small.svg"):
-    code, headers = status(path)
-    assert code == 200, (path, code)
-code, headers = status("/")
-csp = headers["content-security-policy"]
-assert "frame-ancestors 'none'" in csp and "script-src 'self'" in csp, csp
-assert "https://rpc.mainnet.chain.robinhood.com" in csp, "config.js origins missing from connect-src"
-for path in ("/server.py", "/dev_server.py", "/devchain.sh", "/test/eth.test.js", "/README.md",
-             "/Dockerfile", "/assets/../server.py", "/assets/%2e%2e/server.py"):
-    for method in ("GET", "HEAD"):
-        assert status(path, method)[0] == 404, (method, path)
-httpd.shutdown()
-print("   page served with its headers; source refused on GET and HEAD")
-PY
-note $?
 
 step "Docs: the site builds, and no page links to one that does not exist"
 # VitePress refuses to build with a dead internal link, which is the check worth having here.
