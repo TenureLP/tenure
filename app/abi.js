@@ -116,6 +116,7 @@ window.TENURE_ABI = {
     "decimals()": "0x313ce567",
     "symbol()": "0x95d89b41",
     "getApproved(uint256)": "0x081812fc",
-    "ownerOf(uint256)": "0x6352211e"
+    "ownerOf(uint256)": "0x6352211e",
+    "mint(address,uint256)": "0x40c10f19"
   }
 };

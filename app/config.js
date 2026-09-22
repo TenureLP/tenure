@@ -48,6 +48,11 @@ window.TENURE = {
 
       examples: ["5099"],
 
+      /* The settlement token here is TestUSDG, which anyone can mint and which is worth nothing by
+         construction. This is what lets the page offer to mint some. Never set it on a chain whose
+         token is money: the button would only ever revert there, and it would look like a faucet. */
+      testToken: true,
+
       vault: ""
     }
   }

@@ -154,7 +154,8 @@ def render(fns, errs, structs):
         "    \"decimals()\": \"0x313ce567\",\n"
         "    \"symbol()\": \"0x95d89b41\",\n"
         "    \"getApproved(uint256)\": \"0x081812fc\",\n"
-        "    \"ownerOf(uint256)\": \"0x6352211e\"\n"
+        "    \"ownerOf(uint256)\": \"0x6352211e\",\n"
+        "    \"mint(address,uint256)\": \"0x40c10f19\"\n"
         "  }\n"
         "};\n"
     )

@@ -832,6 +832,23 @@
       bar.appendChild(w);
       top.appendChild(bar);
     }
+    // A test network's settlement token is free to mint, and a deal cannot be tried without some.
+    // Mainnet is excluded by id as well as by config: its token is money, and no button here
+    // should ever look like it hands money out.
+    if (CFG.testToken && CFG.chain.id !== 4663 && HAS_VAULT) {
+      var faucetBar = el("div", "bar");
+      faucetBar.style.marginTop = "16px";
+      faucetBar.style.marginBottom = "0";
+      var amount = Eth.toUnits("10000", DEC);
+      var mint = el("button", "ghost", "Get " + money2(amount));
+      mint.title = tok() + " is a test token anyone can mint. It is worth nothing.";
+      mint.addEventListener("click", function () {
+        act(mint, "minting…", CFG.usdg, tokenData("mint(address,uint256)", ["address", "uint256"], [me, amount]),
+            renderYou);
+      });
+      faucetBar.appendChild(mint);
+      top.appendChild(faucetBar);
+    }
     out.appendChild(top);
 
     // A position the vault is holding for you: after a cancel, a buyback, or a release.
