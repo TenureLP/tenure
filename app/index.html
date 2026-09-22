@@ -54,7 +54,7 @@
   .logo { grid-area: logo; }
   .tabs { grid-area: tabs; }
   .tools { grid-area: tools; display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
-  .logo { display: flex; align-items: center; gap: 11px; font-weight: 600; font-size: 20px;
+  .logo { text-decoration: none; color: var(--ink); display: flex; align-items: center; gap: 11px; font-weight: 600; font-size: 20px;
           letter-spacing: -.01em; margin-right: 8px; }
   .logo img { width: 30px; height: 30px; }
   .tabs { display: flex; gap: 2px; }
@@ -253,7 +253,7 @@
 <div class="wrap">
 
   <nav>
-    <span class="logo"><img src="assets/logo-mark-small.svg" alt=""> Tenure</span>
+    <a class="logo" href="https://landing-production-abe1.up.railway.app" aria-label="Tenure home"><img src="assets/logo-mark-small.svg" alt=""> Tenure</a>
     <div class="tabs" aria-label="Screens">
       <button class="tab" type="button" data-go="value">Value</button>
       <button class="tab" type="button" data-go="market">Market</button>
@@ -311,7 +311,9 @@
 
   <footer>
     <span id="foot"></span>
+    <a href="https://landing-production-abe1.up.railway.app">Home</a> ·
     <a href="https://docs-production-3405.up.railway.app">Docs</a> ·
+    <a href="https://landing-production-abe1.up.railway.app/olanas">Olanas</a> ·
     <a href="https://github.com/TenureLP/tenure">Source</a>.
   </footer>
 

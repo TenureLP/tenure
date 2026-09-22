@@ -2,6 +2,7 @@ import { defineConfig } from "vitepress";
 
 const APP = "https://app-production-7810.up.railway.app";
 const REPO = "https://github.com/TenureLP/tenure";
+const HOME = "https://landing-production-abe1.up.railway.app";
 
 export default defineConfig({
   title: "Tenure",
@@ -25,12 +26,23 @@ export default defineConfig({
   themeConfig: {
     logo: "/logo.svg",
     siteTitle: "Tenure",
+    // The four sites live on four domains, so every one of them links to the other three from the
+    // same place: here, the Tenure menu.
     nav: [
       { text: "Guide", link: "/guide/how-a-deal-works" },
       { text: "Contracts", link: "/contracts/lease-vault" },
       { text: "API", link: "/api/" },
+      { text: "Agents", link: "/api/agents" },
       { text: "Testnet", link: "/guide/testnet" },
-      { text: "Open the app", link: APP },
+      {
+        text: "Tenure",
+        items: [
+          { text: "Home", link: HOME },
+          { text: "Open the app", link: APP },
+          { text: "Tenure on Olanas", link: `${HOME}/olanas` },
+          { text: "GitHub", link: REPO },
+        ],
+      },
     ],
     sidebar: [
       {
@@ -73,6 +85,7 @@ export default defineConfig({
         items: [
           { text: "Overview", link: "/api/" },
           { text: "Quotes", link: "/api/quotes" },
+          { text: "Using it from an agent", link: "/api/agents" },
           { text: "Paying per request", link: "/api/payments" },
         ],
       },
