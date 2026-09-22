@@ -6,6 +6,9 @@ Two static pages, no script, no build step, no dependency.
 index.html        the home page
 olanas.html       Tenure on Olanas: the valuation API as a service agents pay for per request
 assets/site.css   the stylesheet both pages share
+assets/motion.css the icons, the animations and the screen switcher, all CSS
+assets/shots/     real captures of the app, copied to docs-site/public/shots
+make-icons.py     the icon set: an inline sprite in each page, one file per icon for the docs
 assets/           logo, favicon, share image
 dev_server.py     local preview, standard library only
 server.py         the container entry point: same handler, every interface, security headers

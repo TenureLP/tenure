@@ -79,6 +79,11 @@ step "App: abi.js is not stale"
 # every button on the page is calling something else.
 (cd app && python3 make-abi-js.py --check); note $?
 
+step "Landing and docs: the icons and the app screens are the same set on both sites"
+# The icons are generated from one table into both; the screens are copied. Either drifting apart
+# means one site shows the product as it was and the other as it is.
+(cd landing && python3 make-icons.py --check)   && diff -rq landing/assets/shots docs-site/public/shots >/dev/null   && echo "   icons generated, $(ls landing/assets/shots | wc -l) screens identical"; note $?
+
 step "Landing and app: each server serves its pages and nothing beside them"
 python3 check-servers.py; note $?
 

@@ -17,8 +17,36 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/assets/site.css">
+  <link rel="stylesheet" href="/assets/motion.css">
 </head>
 <body>
+  <!-- icons:start -->
+  <svg class="sprite" aria-hidden="true">
+    <symbol id="i-no-oracle" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.4 8.3-8 9-4.6-.7-8-4-8-9V6l8-3z"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/></symbol>
+    <symbol id="i-no-fee" viewBox="0 0 24 24"><circle cx="7.5" cy="7.5" r="2.3"/><circle cx="16.5" cy="16.5" r="2.3"/><path d="M19 5L5 19"/></symbol>
+    <symbol id="i-ceiling" viewBox="0 0 24 24"><path d="M4 5h16"/><path d="M12 20V9"/><path d="M8 13l4-4 4 4"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3 12.5V4a1 1 0 0 1 1-1h8.5L21 11.5 12.5 20 3 12.5z"/><circle cx="7.8" cy="7.8" r="1.6"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4.2"/><path d="M11 12l9-9"/><path d="M16.5 6.5l3 3"/><path d="M14 9l2 2"/></symbol>
+    <symbol id="i-buyback" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.35-5.65"/><path d="M20 4v5h-5"/></symbol>
+    <symbol id="i-coins" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M16.5 7H10a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6H7.5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></symbol>
+    <symbol id="i-agent" viewBox="0 0 24 24"><rect x="4.5" y="7.5" width="15" height="12" rx="3.5"/><path d="M12 3.5v4"/><circle cx="12" cy="3" r="1"/><circle cx="9.5" cy="13" r="1.1"/><circle cx="14.5" cy="13" r="1.1"/><path d="M9.5 16.5h5"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19"/><path d="M9 7.5h6"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5"/><path d="M16 7l5 5-5 5"/><path d="M13.5 4l-3 16"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M5 16l4.5-5.5 3.5 3 6-7.5"/><path d="M15 6h4v4"/></symbol>
+    <symbol id="i-no-owner" viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.5"/><path d="M3.5 20a6.5 6.5 0 0 1 13 0"/><path d="M17 5l4 4"/><path d="M21 5l-4 4"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h13"/><path d="M16.5 14.5h1.5"/><path d="M7 6V4.5A1.5 1.5 0 0 1 8.5 3H17"/></symbol>
+    <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v6.2L4.8 18a2 2 0 0 0 1.7 3h11a2 2 0 0 0 1.7-3L14 9.2V3"/><path d="M7.5 15h9"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.66 0l3-3A4 4 0 0 0 13 5.34l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3A4 4 0 0 0 11 18.66l1-1"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.3 4.3 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.3 4.3 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
+  </svg>
+  <!-- icons:end -->
+
   <header class="nav">
     <div class="wrap">
       <a class="brand" href="/" aria-label="Tenure home"><img src="/assets/logo-nav.svg" alt="Tenure" width="196" height="64"></a>
@@ -44,7 +72,7 @@
 
   <main>
     <section class="hero">
-      <div class="wrap">
+      <div class="wrap copy">
         <p class="eyebrow">Tenure × Olanas</p>
         <h1>Let an agent value<br>your position. <span>0.003 USDG a call.</span></h1>
         <p class="lede">The valuation behind the Tenure app is listed on <a href="https://olanas.xyz">Olanas</a>, the API launchpad on Robinhood Chain. An agent running the Olanas Payments MCP finds it, pays for it and reads the answer, with no account, no API key and no wallet prompt per call.</p>
@@ -53,55 +81,79 @@
           <a class="btn ghost" href="https://docs-production-3405.up.railway.app/api/agents">Read the integration guide</a>
         </div>
       </div>
-    </section>
-
-    <section>
       <div class="wrap">
-        <div class="head">
-          <p class="eyebrow">What an agent gets</p>
-          <h2>One call. Everything a deal needs.</h2>
-          <p class="lede">Give it a Uniswap v4 position id on Robinhood Chain. It answers with what the position is worth, what it really earns, and terms it could be sold and leased back on. It only reads: nothing is signed and nothing is sent on the agent's behalf.</p>
-        </div>
-        <div class="grid3">
-          <article class="card">
-            <p class="step">HOLDS</p>
-            <h3>What is in it</h3>
-            <p>The pool, both tokens, the range, whether it is in range, the exact amount of each token and the fees not yet collected, valued in USDG.</p>
-          </article>
-          <article class="card">
-            <p class="step">EARNS</p>
-            <h3>What it really makes</h3>
-            <p>Fees per day and fee APR, measured from the pool's own accumulators over a day of chain history, with the source and a confidence flag. Not a model.</p>
-          </article>
-          <article class="card">
-            <p class="step">RAISES</p>
-            <h3>What it could be sold for</h3>
-            <p>Indicative sale price, buyback and rent for a lease of the length the agent asks for, ready to list on the Tenure vault as they are, or to negotiate from.</p>
-          </article>
+        <div class="flow reveal" aria-label="An agent asks the Olanas gateway, which pays and forwards to the Tenure API, which reads the chain">
+          <div class="fnode"><span class="badge"><svg class="ico"><use href="#i-agent"/></svg></span><b>Your agent</b><small>Olanas Payments MCP</small></div>
+          <div class="flink"><i></i><i></i></div>
+          <div class="fnode"><span class="badge"><svg class="ico"><use href="#i-link"/></svg></span><b>Olanas gateway</b><small>x402 · 0.003 USDG</small></div>
+          <div class="flink"><i></i><i></i></div>
+          <div class="fnode"><span class="badge ok"><svg class="ico"><use href="#i-chart"/></svg></span><b>Tenure API</b><small>reads Robinhood Chain</small></div>
         </div>
       </div>
     </section>
 
     <section>
       <div class="wrap">
-        <div class="head">
+        <div class="head reveal">
+          <p class="eyebrow">What an agent gets</p>
+          <h2>One call. Everything a deal needs.</h2>
+          <p class="lede">Give it a Uniswap v4 position id on Robinhood Chain. It answers with what the position is worth, what it really earns, and terms it could be sold and leased back on. It only reads: nothing is signed and nothing is sent on the agent's behalf.</p>
+        </div>
+        <div class="grid3">
+          <article class="card reveal">
+            <div class="top"><span class="badge"><svg class="ico"><use href="#i-coins"/></svg></span><p class="step">HOLDS</p></div>
+            <h3>What is in it</h3>
+            <p>The pool, both tokens, the range, whether it is in range, the exact amount of each token and the fees not yet collected, valued in USDG.</p>
+          </article>
+          <article class="card reveal">
+            <div class="top"><span class="badge"><svg class="ico"><use href="#i-chart"/></svg></span><p class="step">EARNS</p></div>
+            <h3>What it really makes</h3>
+            <p>Fees per day and fee APR, measured from the pool's own accumulators over a day of chain history, with the source and a confidence flag. Not a model.</p>
+          </article>
+          <article class="card reveal">
+            <div class="top"><span class="badge"><svg class="ico"><use href="#i-tag"/></svg></span><p class="step">RAISES</p></div>
+            <h3>What it could be sold for</h3>
+            <p>Indicative sale price, buyback and rent for a lease of the length the agent asks for, ready to list on the Tenure vault as they are, or to negotiate from.</p>
+          </article>
+        </div>
+        <div class="answer reveal">
+          <p class="k">A real answer for position 3093793, trimmed to the parts a deal needs:</p>
+<pre><code>{
+  <span class="s">"pool"</span>: { <span class="s">"token0"</span>: <span class="s">"ETH"</span>, <span class="s">"token1"</span>: <span class="s">"USDG"</span> },
+  <span class="s">"position"</span>: { <span class="s">"inRange"</span>: <span class="t">true</span> },
+  <span class="s">"valueUSDG"</span>: { <span class="s">"principal"</span>: <span class="n">9113.02</span>, <span class="s">"fees"</span>: <span class="n">12.18</span>, <span class="s">"total"</span>: <span class="n">9125.20</span> },
+  <span class="s">"feeRate"</span>: { <span class="s">"feesPerDayUSDG"</span>: <span class="n">78.12</span>, <span class="s">"feeAprPercent"</span>: <span class="n">312.9</span>, <span class="s">"source"</span>: <span class="s">"rpc-archive"</span> },
+  <span class="s">"quote"</span>: {
+    <span class="s">"termDays"</span>: <span class="n">7</span>,
+    <span class="s">"suggestedSalePriceUSDG"</span>: <span class="n">7300.16</span>,
+    <span class="s">"suggestedBuybackPriceUSDG"</span>: <span class="n">7300.16</span>,
+    <span class="s">"suggestedRentUSDG"</span>: <span class="n">273.43</span>
+  }
+}</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head reveal">
           <p class="eyebrow">How it works</p>
           <h2>From install to answer.</h2>
         </div>
         <div class="grid3">
-          <article class="card">
-            <p class="step">01 · INSTALL</p>
+          <article class="card reveal">
+            <div class="top"><span class="badge"><svg class="ico"><use href="#i-code"/></svg></span><p class="step">01 · INSTALL</p></div>
             <h3>The Olanas Payments MCP</h3>
             <p>A local MCP server and companion wallet by Olanas. It creates a key on your own machine, encrypts it locally, and registers itself with Claude, Codex, Gemini or any MCP client. Their README has the one command.</p>
             <a class="go" href="https://github.com/olanass/web/tree/olanas-payments-mcp">Olanas Payments MCP →</a>
           </article>
-          <article class="card">
-            <p class="step">02 · BOUND IT</p>
+          <article class="card reveal">
+            <div class="top"><span class="badge"><svg class="ico"><use href="#i-wallet"/></svg></span><p class="step">02 · BOUND IT</p></div>
             <h3>A spending session you set</h3>
             <p>Fund the wallet, then enable a session in the companion: a per-call cap, a total budget and an expiry. Nothing is spent until you do, and nothing beyond what you allow.</p>
           </article>
-          <article class="card">
-            <p class="step">03 · ASK</p>
+          <article class="card reveal">
+            <div class="top"><span class="badge"><svg class="ico"><use href="#i-agent"/></svg></span><p class="step">03 · ASK</p></div>
             <h3>“Value position 3093793”</h3>
             <p>The agent searches the launchpad, finds Tenure position valuation, pays 0.003 USDG through the Olanas gateway and gets the valuation back.</p>
           </article>
@@ -111,11 +163,11 @@
 
     <section>
       <div class="wrap">
-        <div class="head">
+        <div class="head reveal">
           <p class="eyebrow">The listing</p>
           <h2>Live on the launchpad.</h2>
         </div>
-        <div class="tablewrap">
+        <div class="tablewrap reveal">
           <table class="kv">
             <tbody>
               <tr><th>Service</th><td>Tenure position valuation</td></tr>
@@ -133,12 +185,12 @@
 
     <section>
       <div class="wrap">
-        <div class="head">
+        <div class="head reveal">
           <p class="eyebrow">Same rails</p>
           <h2>Built for the same chain, the same way.</h2>
           <p class="lede">Nothing had to be adapted. Tenure's API already spoke the payment scheme Olanas uses, on the chain Olanas runs on.</p>
         </div>
-        <div class="tablewrap">
+        <div class="tablewrap reveal">
           <table>
             <thead><tr><th></th><th>Olanas</th><th>Tenure's API</th></tr></thead>
             <tbody>
@@ -155,21 +207,21 @@
 
     <section>
       <div class="wrap">
-        <div class="head">
+        <div class="head reveal">
           <p class="eyebrow">What we do with Olanas</p>
           <h2>A service on their launchpad, and code in their repository.</h2>
         </div>
         <div class="grid2">
-          <article class="card">
-            <h3>We list on it</h3>
+          <article class="card reveal">
+            <div class="top"><span class="badge"><svg class="ico"><use href="#i-tag"/></svg></span><h3>We list on it</h3></div>
             <ul class="ticks">
               <li>Tenure position valuation was one of the first services published on the launchpad.</li>
               <li>It ships with its OpenAPI document, which Olanas republishes pointing at their gateway.</li>
               <li>Its gateway answers a standard x402 version 2 challenge: <code>onchain-tx</code>, <code>eip155:4663</code>, 0.003 USDG.</li>
             </ul>
           </article>
-          <article class="card">
-            <h3>We contribute to it</h3>
+          <article class="card reveal">
+            <div class="top"><span class="badge"><svg class="ico"><use href="#i-github"/></svg></span><h3>We contribute to it</h3></div>
             <ul class="ticks">
               <li>Olanas is open source. We read the code we depend on.</li>
               <li>When we find something worth fixing, we send the fix upstream as a pull request, under the Tenure name.</li>
@@ -183,7 +235,7 @@
 
     <section>
       <div class="wrap">
-        <div class="head">
+        <div class="head reveal">
           <p class="eyebrow">Without Olanas</p>
           <h2>Or call it directly, for free.</h2>
           <p class="lede">The public instance runs free today. Anyone can call it, no payment, no key.</p>
@@ -202,7 +254,7 @@
         <h2 class="cta-title">An answer an agent can act on.</h2>
         <p class="lede">The terms in a quote are the terms the Tenure vault takes. What an agent values, the app can list.</p>
         <div class="actions">
-          <a class="btn" href="https://app-production-7810.up.railway.app">Open the app</a>
+          <a class="btn" href="https://app-production-7810.up.railway.app">Open the app <svg class="ico"><use href="#i-arrow"/></svg></a>
           <a class="btn ghost" href="https://docs-production-3405.up.railway.app/guide/how-a-deal-works">How a deal works</a>
         </div>
       </div>

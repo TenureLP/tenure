@@ -19,13 +19,42 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/assets/site.css">
+  <link rel="stylesheet" href="/assets/motion.css">
 </head>
 <body>
+  <!-- icons:start -->
+  <svg class="sprite" aria-hidden="true">
+    <symbol id="i-no-oracle" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.4 8.3-8 9-4.6-.7-8-4-8-9V6l8-3z"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/></symbol>
+    <symbol id="i-no-fee" viewBox="0 0 24 24"><circle cx="7.5" cy="7.5" r="2.3"/><circle cx="16.5" cy="16.5" r="2.3"/><path d="M19 5L5 19"/></symbol>
+    <symbol id="i-ceiling" viewBox="0 0 24 24"><path d="M4 5h16"/><path d="M12 20V9"/><path d="M8 13l4-4 4 4"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3 12.5V4a1 1 0 0 1 1-1h8.5L21 11.5 12.5 20 3 12.5z"/><circle cx="7.8" cy="7.8" r="1.6"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4.2"/><path d="M11 12l9-9"/><path d="M16.5 6.5l3 3"/><path d="M14 9l2 2"/></symbol>
+    <symbol id="i-buyback" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.35-5.65"/><path d="M20 4v5h-5"/></symbol>
+    <symbol id="i-coins" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M16.5 7H10a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6H7.5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></symbol>
+    <symbol id="i-agent" viewBox="0 0 24 24"><rect x="4.5" y="7.5" width="15" height="12" rx="3.5"/><path d="M12 3.5v4"/><circle cx="12" cy="3" r="1"/><circle cx="9.5" cy="13" r="1.1"/><circle cx="14.5" cy="13" r="1.1"/><path d="M9.5 16.5h5"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19"/><path d="M9 7.5h6"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5"/><path d="M16 7l5 5-5 5"/><path d="M13.5 4l-3 16"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M5 16l4.5-5.5 3.5 3 6-7.5"/><path d="M15 6h4v4"/></symbol>
+    <symbol id="i-no-owner" viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.5"/><path d="M3.5 20a6.5 6.5 0 0 1 13 0"/><path d="M17 5l4 4"/><path d="M21 5l-4 4"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h13"/><path d="M16.5 14.5h1.5"/><path d="M7 6V4.5A1.5 1.5 0 0 1 8.5 3H17"/></symbol>
+    <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v6.2L4.8 18a2 2 0 0 0 1.7 3h11a2 2 0 0 0 1.7-3L14 9.2V3"/><path d="M7.5 15h9"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.66 0l3-3A4 4 0 0 0 13 5.34l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3A4 4 0 0 0 11 18.66l1-1"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.3 4.3 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.3 4.3 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
+  </svg>
+  <!-- icons:end -->
+
   <header class="nav">
     <div class="wrap">
       <a class="brand" href="/" aria-label="Tenure home"><img src="/assets/logo-nav.svg" alt="Tenure" width="196" height="64"></a>
       <nav aria-label="Main">
         <a href="/#how">How it works</a>
+        <a href="/#see">The app</a>
         <a href="/olanas">Olanas</a>
         <a class="out" href="https://docs-production-3405.up.railway.app">Docs</a>
         <a class="out" href="https://github.com/TenureLP/tenure">GitHub</a>
@@ -37,6 +66,7 @@
           <a href="https://app-production-7810.up.railway.app">Open the app <small>Value a position, list it, fund one</small></a>
           <a href="https://docs-production-3405.up.railway.app">Docs <small>How a deal works, the contract, the API</small></a>
           <a href="/#how">How it works <small>Three acts, one transaction each</small></a>
+          <a href="/#see">The app <small>Every screen, as it runs</small></a>
           <a href="/olanas">Olanas <small>Agents that pay for our API per request</small></a>
           <a href="https://github.com/TenureLP/tenure">GitHub <small>Every line of it</small></a>
         </div>
@@ -47,75 +77,64 @@
   <main id="top">
     <section class="hero">
       <div class="wrap split">
-        <div>
+        <div class="copy">
           <p class="eyebrow">Uniswap v4 · Robinhood Chain</p>
           <h1>Sell it.<br>Lease it back. <span>Keep the fees.</span></h1>
           <p class="lede">Tenure turns a liquidity position into cash today, without a loan. You sell the position, lease it straight back for a fixed rent, keep collecting its swap fees, and buy it back at a price agreed before any of it starts.</p>
           <div class="actions">
-            <a class="btn" href="https://app-production-7810.up.railway.app">Value a position</a>
+            <a class="btn" href="https://app-production-7810.up.railway.app">Value a position <svg class="ico"><use href="#i-arrow"/></svg></a>
             <a class="btn ghost" href="https://docs-production-3405.up.railway.app/guide/how-a-deal-works">How a deal works</a>
           </div>
           <p class="under"><span class="pill soon">Testnet soon</span>&nbsp; The app already values any position on mainnet.</p>
         </div>
 
-        <svg class="chart" viewBox="0 0 640 420" role="img" aria-label="A liquidity curve with the leased range highlighted between two tick bounds">
-          <defs>
-            <linearGradient id="lit" x1="0" y1="70" x2="0" y2="360" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="#F5B84B" stop-opacity=".46"/><stop offset="1" stop-color="#F5B84B" stop-opacity=".02"/>
-            </linearGradient>
-            <clipPath id="rng"><rect x="212" y="0" width="216" height="420"/></clipPath>
-          </defs>
-          <g fill="#F4F1EA" opacity=".14">
-            <rect x="0" y="360" width="640" height="2"/>
-            <g id="tk"><rect x="20" y="348" width="2" height="12"/><rect x="50" y="348" width="2" height="12"/><rect x="80" y="348" width="2" height="12"/><rect x="110" y="348" width="2" height="12"/><rect x="140" y="348" width="2" height="12"/><rect x="170" y="348" width="2" height="12"/></g>
-            <use href="#tk" x="180"/><use href="#tk" x="360"/><rect x="560" y="348" width="2" height="12"/><rect x="590" y="348" width="2" height="12"/><rect x="620" y="348" width="2" height="12"/>
-          </g>
-          <path d="M0 360 C 190 360 230 70 320 70 S 450 360 640 360 Z" fill="#F4F1EA" opacity=".05"/>
-          <path d="M0 360 C 190 360 230 70 320 70 S 450 360 640 360 Z" fill="url(#lit)" clip-path="url(#rng)"/>
-          <path d="M0 360 C 190 360 230 70 320 70 S 450 360 640 360" fill="none" stroke="#F4F1EA" stroke-width="2.5" opacity=".28"/>
-          <path d="M0 360 C 190 360 230 70 320 70 S 450 360 640 360" fill="none" stroke="#F5B84B" stroke-width="5" stroke-linecap="round" clip-path="url(#rng)"/>
-          <rect x="200" y="40" width="12" height="324" rx="6" fill="#F4F1EA"/>
-          <rect x="428" y="40" width="12" height="324" rx="6" fill="#F4F1EA"/>
-          <g class="price"><circle r="17" fill="#0E1726"/><circle r="10" fill="#F4F1EA"/></g>
-          <g font-family="Barlow, sans-serif" font-weight="600" font-size="12" letter-spacing="2.4" fill="#F4F1EA" opacity=".5" text-anchor="middle">
-            <text x="206" y="24">TICK LOWER</text><text x="434" y="24">TICK UPPER</text>
-          </g>
-          <g font-family="Barlow, sans-serif" font-weight="600" font-size="12" letter-spacing="2.4" text-anchor="middle">
-            <text x="320" y="398" fill="#F5B84B">YOUR POSITION, STILL EARNING</text>
-          </g>
-        </svg>
+        <div class="visual" aria-label="The Tenure app valuing a position, and a deal listed on its market">
+          <div class="window main">
+            <div class="bar"><i></i><i></i><i></i><span>app-production-7810.up.railway.app</span></div>
+            <img src="/assets/shots/value-start.jpg" alt="The app's first screen: paste a position id and value it" width="1400" height="814">
+          </div>
+          <div class="floatcard"><img src="/assets/shots/deal-card.jpg" alt="A deal on the market: ETH / USDG, sale price 5,541.56 USDG, rent 243.54 USDG for 7 days" width="1100" height="287"></div>
+          <div class="bubble b1"><svg class="ico"><use href="#i-chart"/></svg><span><b>70.15 USDG a day</b>what the range earned</span></div>
+          <div class="bubble b2"><svg class="ico"><use href="#i-shield"/></svg><span><b>No liquidation</b>nothing is lent</span></div>
+        </div>
       </div>
 
       <div class="wrap">
         <div class="facts">
-          <div><b>0</b><span>price oracles in the deal path</span></div>
-          <div><b>0</b><span>liquidations, by construction</span></div>
-          <div><b>0</b><span>protocol fee, and no owner to add one</span></div>
-          <div><b>≤ sale</b><span>the buyback price, always</span></div>
+          <div><span class="badge"><svg class="ico"><use href="#i-no-oracle"/></svg></span><b>0</b><span>price oracles in the deal path</span></div>
+          <div><span class="badge"><svg class="ico"><use href="#i-shield"/></svg></span><b>0</b><span>liquidations, by construction</span></div>
+          <div><span class="badge"><svg class="ico"><use href="#i-no-fee"/></svg></span><b>0</b><span>protocol fee, and no owner to add one</span></div>
+          <div><span class="badge"><svg class="ico"><use href="#i-ceiling"/></svg></span><b>≤ sale</b><span>the buyback price, always</span></div>
         </div>
       </div>
     </section>
 
     <section id="how">
       <div class="wrap">
-        <div class="head">
+        <div class="head reveal">
           <p class="eyebrow">How it works</p>
           <h2>Three acts, one transaction each.</h2>
           <p class="lede">No debt is created at any point. There is a sale, a lease, and a promise to sell back at a price fixed on day one.</p>
         </div>
+        <div class="track reveal" aria-hidden="true">
+          <div class="rail"><i></i></div>
+          <div class="node n1"><span class="badge"><svg class="ico"><use href="#i-tag"/></svg></span><b>Listed</b><small>you set the terms</small></div>
+          <div class="node n2"><span class="badge"><svg class="ico"><use href="#i-key"/></svg></span><b>Active</b><small>funded, leased back to you</small></div>
+          <div class="node n3"><span class="badge"><svg class="ico"><use href="#i-buyback"/></svg></span><b>Bought back</b><small>yours again</small></div>
+        </div>
         <div class="grid3">
-          <article class="card">
-            <p class="step">01 · SELL</p>
+          <article class="card reveal">
+            <div class="top"><span class="badge"><svg class="ico"><use href="#i-tag"/></svg></span><p class="step">01 · SELL</p></div>
             <h3>A financier buys your position.</h3>
             <p>You list your position NFT with a sale price, a rent and a buyback price. A financier pays the price in USDG and becomes the owner. Ownership really transfers: they can sell it on, and they carry its risk.</p>
           </article>
-          <article class="card">
-            <p class="step">02 · LEASE</p>
+          <article class="card reveal">
+            <div class="top"><span class="badge"><svg class="ico"><use href="#i-key"/></svg></span><p class="step">02 · LEASE</p></div>
             <h3>You keep working it.</h3>
             <p>It is leased straight back to you, for 1 to 30 days. You collect the swap fees it earns as often as you like. The rent is a fixed amount, prepaid, streamed to the owner by the second. Nobody can pull the liquidity.</p>
           </article>
-          <article class="card">
-            <p class="step">03 · BUY BACK, OR DON'T</p>
+          <article class="card reveal">
+            <div class="top"><span class="badge ok"><svg class="ico"><use href="#i-buyback"/></svg></span><p class="step">03 · BUY BACK, OR DON'T</p></div>
             <h3>Your call at the end.</h3>
             <p>Pay the buyback price any time before the grace window closes and the position is yours again, with unused rent refunded. If you pass, the financier keeps what they already own. You owe nothing.</p>
           </article>
@@ -123,15 +142,66 @@
       </div>
     </section>
 
+    <section id="see">
+      <div class="wrap">
+        <div class="head reveal">
+          <p class="eyebrow">The app</p>
+          <h2>Every step, on one page.</h2>
+          <p class="lede">These are the real screens, taken from the app running against a fork of Robinhood Chain with the real USDG and the real Uniswap v4 contracts underneath. Position 3093793, ETH / USDG, listed and funded through the page itself.</p>
+        </div>
+        <div class="show reveal">
+          <input type="radio" name="screen" id="s1" checked aria-label="Value">
+          <input type="radio" name="screen" id="s2" aria-label="Market">
+          <input type="radio" name="screen" id="s3" aria-label="Lessee">
+          <input type="radio" name="screen" id="s4" aria-label="Financier">
+          <input type="radio" name="screen" id="s5" aria-label="Testnet">
+          <div class="tabbar">
+            <label for="s1"><svg class="ico"><use href="#i-search"/></svg>Value</label>
+            <label for="s2"><svg class="ico"><use href="#i-tag"/></svg>Market</label>
+            <label for="s3"><svg class="ico"><use href="#i-key"/></svg>Lessee</label>
+            <label for="s4"><svg class="ico"><use href="#i-wallet"/></svg>Financier</label>
+            <label for="s5"><svg class="ico"><use href="#i-flask"/></svg>Testnet</label>
+          </div>
+          <div class="screens">
+            <figure class="scr p1">
+              <div class="window"><div class="bar"><i></i><i></i><i></i><span>app · Value</span></div><img src="/assets/shots/value-position.jpg" alt="Position 3093793 valued: 6,926.95 USDG, earning 70.15 USDG a day" width="1400" height="1143" loading="lazy"></div>
+              <figcaption><b>What it is worth, and what it earns.</b>
+                <ul class="ticks"><li>The exact amount of each token, and the fees not yet collected.</li><li>Fees per day and APR, read from the pool over a full day of chain history.</li><li>Indicative terms, ready to list. Nothing is signed here.</li></ul></figcaption>
+            </figure>
+            <figure class="scr p2">
+              <div class="window"><div class="bar"><i></i><i></i><i></i><span>app · Market</span></div><img src="/assets/shots/market.jpg" alt="The market: deal 1, ETH / USDG, rent on price 4.39 % over 7 days" width="1400" height="728" loading="lazy"></div>
+              <figcaption><b>Somebody funds it.</b>
+                <ul class="ticks"><li>Every open listing, with the pair and the rent as a share of the price, per term and per year.</li><li>Funding approves exactly the price, never more.</li><li>Every transaction is dry-run first, so a refusal is named before any gas is spent.</li></ul></figcaption>
+            </figure>
+            <figure class="scr p3">
+              <div class="window"><div class="bar"><i></i><i></i><i></i><span>app · You, the lessee</span></div><img src="/assets/shots/lessee.jpg" alt="The lessee's view: proceeds to withdraw, collect the fees, buy it back" width="1400" height="1178" loading="lazy"></div>
+              <figcaption><b>You keep the fees.</b>
+                <ul class="ticks"><li>Your proceeds wait in the vault until you withdraw them.</li><li>Collect the fees whenever you like, for the whole term.</li><li>Buy it back at the price fixed on day one.</li></ul></figcaption>
+            </figure>
+            <figure class="scr p4">
+              <div class="window"><div class="bar"><i></i><i></i><i></i><span>app · You, the financier</span></div><img src="/assets/shots/financier.jpg" alt="The financier's view: claim the rent so far, sell your side" width="1400" height="1100" loading="lazy"></div>
+              <figcaption><b>The financier earns the rent.</b>
+                <ul class="ticks"><li>Rent streams by the second; claim it whenever.</li><li>Sell your side mid-lease. Nothing changes for the lessee.</li><li>Take delivery if they never buy back.</li></ul></figcaption>
+            </figure>
+            <figure class="scr p5">
+              <div class="window"><div class="bar"><i></i><i></i><i></i><span>app · Robinhood testnet</span></div><img src="/assets/shots/testnet.jpg" alt="The app on Robinhood testnet: offer a position on your own terms" width="1400" height="829" loading="lazy"></div>
+              <figcaption><b>Next: the testnet.</b>
+                <ul class="ticks"><li>The same contracts, the same Uniswap v4 addresses.</li><li>A test settlement token anyone can mint, worth nothing by construction.</li><li>You write the terms; the vault checks them.</li></ul></figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="sides">
       <div class="wrap">
-        <div class="head">
+        <div class="head reveal">
           <p class="eyebrow">Two sides</p>
           <h2>Who it is for.</h2>
         </div>
         <div class="grid2">
-          <article class="card">
-            <h3>Liquidity providers</h3>
+          <article class="card reveal">
+            <div class="top"><span class="badge"><svg class="ico"><use href="#i-coins"/></svg></span><h3>Liquidity providers</h3></div>
             <ul class="ticks">
               <li>Cash today without unwinding the position or leaving the pool.</li>
               <li>You keep the fee income for the whole lease.</li>
@@ -140,8 +210,8 @@
             </ul>
             <a class="go" href="https://docs-production-3405.up.railway.app/guide/sellers">Selling a position →</a>
           </article>
-          <article class="card">
-            <h3>Financiers</h3>
+          <article class="card reveal">
+            <div class="top"><span class="badge"><svg class="ico"><use href="#i-wallet"/></svg></span><h3>Financiers</h3></div>
             <ul class="ticks">
               <li>You own a real, productive on-chain asset, not an IOU.</li>
               <li>Fixed rent, prepaid into escrow and streamed per second.</li>
@@ -157,11 +227,11 @@
 
     <section id="compare">
       <div class="wrap">
-        <div class="head">
+        <div class="head reveal">
           <p class="eyebrow">Not a loan</p>
           <h2>Same cash today. A different contract.</h2>
         </div>
-        <div class="tablewrap">
+        <div class="tablewrap reveal">
           <table class="compare">
             <thead><tr><th></th><th>Collateralised loan</th><th>Tenure</th></tr></thead>
             <tbody>
@@ -179,23 +249,26 @@
 
     <section id="agents">
       <div class="wrap">
-        <div class="head">
+        <div class="head reveal">
           <p class="eyebrow">For agents</p>
           <h2>An API an agent can buy, one request at a time.</h2>
           <p class="lede">The valuation behind the app is listed on Olanas, the API launchpad on Robinhood Chain. An agent running the Olanas Payments MCP can price any position and get lease terms for 0.003 USDG a call, with no account and no API key.</p>
         </div>
         <div class="grid3">
-          <a class="card" href="/olanas">
+          <a class="card reveal" href="/olanas">
+            <span class="badge"><svg class="ico"><use href="#i-agent"/></svg></span>
             <h3>Tenure on Olanas</h3>
             <p>What an agent gets, how it pays, and the listing itself.</p>
             <span class="go">Read →</span>
           </a>
-          <a class="card" href="https://docs-production-3405.up.railway.app/api/">
+          <a class="card reveal" href="https://docs-production-3405.up.railway.app/api/">
+            <span class="badge"><svg class="ico"><use href="#i-code"/></svg></span>
             <h3>The valuation API</h3>
             <p>Routes, fields, quotes and the OpenAPI document, served by the running build.</p>
             <span class="go">Docs →</span>
           </a>
-          <a class="card" href="https://docs-production-3405.up.railway.app/api/agents">
+          <a class="card reveal" href="https://docs-production-3405.up.railway.app/api/agents">
+            <span class="badge"><svg class="ico"><use href="#i-link"/></svg></span>
             <h3>Using it from an agent</h3>
             <p>Through Olanas, or directly over HTTP 402.</p>
             <span class="go">Docs →</span>
@@ -206,23 +279,23 @@
 
     <section id="status">
       <div class="wrap">
-        <div class="head">
+        <div class="head reveal">
           <p class="eyebrow">Status</p>
           <h2>Where we actually are.</h2>
           <p class="lede">Early, and we would rather say so. This is what exists today and what does not.</p>
         </div>
         <div class="grid2">
-          <article class="card"><span class="tag done">Live</span><h3>The app</h3><p>Values any Uniswap v4 position on Robinhood Chain: what it holds, what its range really earned over a day of chain history, and the terms it could raise. Lists, funds and settles deals as soon as a vault exists on the chain.</p></article>
-          <article class="card"><span class="tag done">Live</span><h3>Valuation API and docs</h3><p>Exact integer maths over JSON-RPC, listed on Olanas. The documentation covers every function and error of the contract.</p></article>
-          <article class="card"><span class="tag next">Next</span><h3>Testnet</h3><p>The vault on Robinhood Chain testnet, with a test settlement token anyone can mint. The whole deal, end to end, with nothing at stake.</p></article>
-          <article class="card"><span class="tag todo">Not yet</span><h3>Audit and mainnet</h3><p>Not audited. The contracts are covered by unit tests, a stateful fuzz and integration tests against the live Uniswap v4 contracts, but no independent audit has happened. No mainnet deployment without one.</p></article>
+          <article class="card reveal"><div class="top"><span class="badge ok"><svg class="ico"><use href="#i-check"/></svg></span><span class="tag done">Live</span></div><h3>The app</h3><p>Values any Uniswap v4 position on Robinhood Chain: what it holds, what its range really earned over a day of chain history, and the terms it could raise. Lists, funds and settles deals as soon as a vault exists on the chain.</p></article>
+          <article class="card reveal"><div class="top"><span class="badge ok"><svg class="ico"><use href="#i-check"/></svg></span><span class="tag done">Live</span></div><h3>Valuation API and docs</h3><p>Exact integer maths over JSON-RPC, listed on Olanas. The documentation covers every function and error of the contract.</p></article>
+          <article class="card reveal"><div class="top"><span class="badge"><svg class="ico"><use href="#i-flask"/></svg></span><span class="tag next">Next</span></div><h3>Testnet</h3><p>The vault on Robinhood Chain testnet, with a test settlement token anyone can mint. The whole deal, end to end, with nothing at stake.</p></article>
+          <article class="card reveal"><div class="top"><span class="badge"><svg class="ico"><use href="#i-clock"/></svg></span><span class="tag todo">Not yet</span></div><h3>Audit and mainnet</h3><p>Not audited. The contracts are covered by unit tests, a stateful fuzz and integration tests against the live Uniswap v4 contracts, but no independent audit has happened. No mainnet deployment without one.</p></article>
         </div>
       </div>
     </section>
 
     <section id="faq">
       <div class="wrap">
-        <div class="head"><p class="eyebrow">FAQ</p><h2>Straight answers.</h2></div>
+        <div class="head reveal"><p class="eyebrow">FAQ</p><h2>Straight answers.</h2></div>
         <details class="q"><summary>Is this a loan under another name?</summary><p>No. There is a sale, then a lease, then a one-sided promise by the new owner to sell back at a price fixed in advance, and never above the sale price. No debt exists at any point: if you never buy back, you owe nothing and nothing is seized, because the position already belongs to the financier.</p></details>
         <details class="q"><summary>Which positions are eligible?</summary><p>Any Uniswap v4 position on Robinhood Chain that holds liquidity, is in range when listed and funded, and has no subscriber attached. The contract does not judge pools: whoever funds a deal decides whether it is a pool they want to own a piece of.</p></details>
         <details class="q"><summary>What does the protocol charge?</summary><p>Nothing. The contract has no fee and no address it pays. A front end can ask to be paid through a builder code, and only the party that names it pays it, out of their own money, capped at 1% of the price.</p></details>
@@ -239,7 +312,7 @@
         <h2 class="cta-title">See what your position could raise.</h2>
         <p class="lede">Paste a position id. Nothing is signed, nothing is sent.</p>
         <div class="actions">
-          <a class="btn" href="https://app-production-7810.up.railway.app">Open the app</a>
+          <a class="btn" href="https://app-production-7810.up.railway.app">Open the app <svg class="ico"><use href="#i-arrow"/></svg></a>
           <a class="btn ghost" href="https://docs-production-3405.up.railway.app/guide/testnet">About the testnet</a>
         </div>
       </div>
