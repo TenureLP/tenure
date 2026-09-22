@@ -315,7 +315,7 @@
     quiet();
     try {
       var hash = await Wallet.send(to, data);
-      button.textContent = "waiting for the block…";
+      button.textContent = (label.match(/^Step \d of \d · /) || [""])[0] + "waiting for the block…";
       await Wallet.wait(hash);
       say(sentence(label.replace(/^Step \d of \d · /, "").replace(/…$/, "") + " done"), "ok", txLink(hash));
       if (after) await after();
@@ -1152,7 +1152,9 @@
     foot.textContent = "";
     if (HAS_VAULT) {
       foot.appendChild(document.createTextNode("Vault "));
-      foot.appendChild(addr(CFG.vault));
+      var v = addr(CFG.vault);
+      v.textContent = short(CFG.vault); // "Vault the vault" otherwise: here it is named already
+      foot.appendChild(v);
       foot.appendChild(document.createTextNode(" on " + CFG.chain.name + ". "));
     } else {
       foot.textContent = "No contract is deployed on " + CFG.chain.name +
