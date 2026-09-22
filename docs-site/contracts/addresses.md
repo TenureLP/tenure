@@ -1,0 +1,34 @@
+# Addresses
+
+## Robinhood Chain testnet, 46630
+
+| Contract | Address |
+|---|---|
+| `LeaseVault` | <span class="pill soon">deploying</span> |
+| `TestUSDG` (tUSDG) | <span class="pill soon">deploying</span> |
+| Uniswap v4 PositionManager | `0x58daec3116aae6D93017bAAea7749052E8a04fA7` |
+
+RPC `https://rpc.testnet.chain.robinhood.com` · Explorer
+[explorer.testnet.chain.robinhood.com](https://explorer.testnet.chain.robinhood.com)
+
+## Robinhood Chain mainnet, 4663
+
+| Contract | Address |
+|---|---|
+| `LeaseVault` | <span class="pill no">not deployed</span> |
+| USDG | `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` |
+| Uniswap v4 PositionManager | `0x58daec3116aae6D93017bAAea7749052E8a04fA7` |
+| Uniswap v4 StateView | `0xF3334192D15450CdD385c8B70e03f9A6bD9E673b` |
+| Uniswap v4 PoolManager | `0x8366a39CC670B4001A1121B8F6A443A643e40951` |
+
+RPC `https://rpc.mainnet.chain.robinhood.com` · Explorer
+[robinhoodchain.blockscout.com](https://robinhoodchain.blockscout.com)
+
+The testnet carries the same Uniswap v4 deployment at the same addresses as mainnet.
+`verify-addresses.sh` checks every one of them against the chain before any deployment: a young chain
+redeploys its infrastructure, and the vault cannot tell an empty address from a silent one.
+
+```bash
+./verify-addresses.sh            # mainnet
+./verify-addresses.sh testnet    # testnet
+```

@@ -1,0 +1,76 @@
+/* The app's palette, mapped onto VitePress's tokens. Dark only, like the app. */
+:root, .dark {
+  --vp-font-family-base: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --vp-font-family-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --vp-c-bg: #0A111D;
+  --vp-c-bg-alt: #0E1726;
+  --vp-c-bg-elv: #121D31;
+  --vp-c-bg-soft: #121D31;
+
+  --vp-c-text-1: #F4F1EA;
+  --vp-c-text-2: rgba(244, 241, 234, .72);
+  --vp-c-text-3: rgba(244, 241, 234, .54);
+
+  --vp-c-divider: rgba(244, 241, 234, .11);
+  --vp-c-border: rgba(244, 241, 234, .22);
+  --vp-c-gutter: #0A111D;
+
+  --vp-c-brand-1: #F5B84B;
+  --vp-c-brand-2: #FFD683;
+  --vp-c-brand-3: #F5B84B;
+  --vp-c-brand-soft: rgba(245, 184, 75, .14);
+
+  --vp-button-brand-bg: #F5B84B;
+  --vp-button-brand-text: #0A111D;
+  --vp-button-brand-hover-bg: #FFD683;
+  --vp-button-brand-hover-text: #0A111D;
+  --vp-button-brand-active-bg: #FFD683;
+  --vp-button-brand-active-text: #0A111D;
+  --vp-button-alt-bg: #17243C;
+
+  --vp-c-tip-1: #7BE0A6;
+  --vp-c-tip-soft: rgba(123, 224, 166, .10);
+  --vp-c-warning-1: #F5B84B;
+  --vp-c-warning-soft: rgba(245, 184, 75, .10);
+  --vp-c-danger-1: #FF8B7B;
+  --vp-c-danger-soft: rgba(255, 139, 123, .10);
+
+  --vp-code-block-bg: #0E1726;
+  --vp-code-bg: rgba(244, 241, 234, .07);
+  --vp-code-color: #FFD683;
+
+  --vp-home-hero-name-color: #F4F1EA;
+  --vp-home-hero-image-background-image: radial-gradient(circle, rgba(245, 184, 75, .28), transparent 65%);
+  --vp-home-hero-image-filter: blur(56px);
+
+  --vp-nav-bg-color: rgba(10, 17, 29, .88);
+  --vp-sidebar-bg-color: #0A111D;
+  --vp-local-search-bg: #0E1726;
+}
+
+body {
+  background:
+    radial-gradient(1100px 700px at 70% -10%, rgba(27, 43, 72, .55), transparent 70%),
+    #0A111D;
+}
+
+.VPHero .name { letter-spacing: -.02em; }
+.VPHero .text { letter-spacing: -.02em; font-weight: 600; }
+.VPHero .tagline { color: rgba(244, 241, 234, .72); }
+.VPFeature { border: 1px solid rgba(244, 241, 234, .11); }
+.VPFeature .title { font-size: 17px; }
+
+.vp-doc h1 { letter-spacing: -.02em; }
+.vp-doc h2 { letter-spacing: -.01em; border-top-color: rgba(244, 241, 234, .11); }
+.vp-doc table { display: table; width: 100%; }
+.vp-doc th { background: #121D31; }
+.vp-doc tr:nth-child(2n) { background: rgba(18, 29, 49, .45); }
+.vp-doc td code, .vp-doc th code { white-space: nowrap; }
+
+/* A small label for the state of something: live, soon, not yet. */
+.pill { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .08em;
+        text-transform: uppercase; padding: 2px 10px; border-radius: 999px; vertical-align: middle; }
+.pill.live { background: rgba(123, 224, 166, .12); color: #7BE0A6; }
+.pill.soon { background: rgba(245, 184, 75, .14); color: #F5B84B; }
+.pill.no { background: rgba(255, 139, 123, .12); color: #FF8B7B; }

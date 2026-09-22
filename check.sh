@@ -21,7 +21,7 @@ step "Python: lp-api tests"
 
 step "Python: syntax of every module"
 python3 -m compileall -q lp-api/lpval landing/api landing/dev_server.py landing/server.py \
-  landing/read_waitlist.py >/dev/null; note $?
+  landing/read_waitlist.py app/server.py docs-site/server.py >/dev/null; note $?
 
 step "API: the description matches the service, and both spellings match each other"
 # A description nobody checks drifts from the build within a week, and this one is handed to third
@@ -155,6 +155,16 @@ httpd.shutdown()
 print("   page served with its headers; source refused on GET and HEAD")
 PY
 note $?
+
+step "Docs: the site builds, and no page links to one that does not exist"
+# VitePress refuses to build with a dead internal link, which is the check worth having here.
+if [ -n "$NODE" ] && [ -d docs-site/node_modules ]; then
+  (cd docs-site && PATH="$(dirname "$NODE"):$PATH" npm run build >/tmp/tenure-docs-build.log 2>&1)
+  r=$?; [ $r -ne 0 ] && tail -20 /tmp/tenure-docs-build.log | sed 's/^/   /'
+  note $r
+else
+  echo '   skipped, run npm ci in docs-site first'; note 0
+fi
 
 if [ "${1:-}" = "--fork" ]; then
   step "Solidity: fork integration tests"
