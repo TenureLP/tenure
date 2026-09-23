@@ -62,7 +62,7 @@ window.TENURE = {
       /* lease-vault/deploy-faucet.sh prints this. It hands anyone a live position in a pool of
          two test tokens, which is the one thing a tester cannot otherwise get on this chain.
          Empty, and the page offers no such button. */
-      faucet: ""
+      faucet: "0x901a27604cff123bfae0b4290c287ab50463cbc6"
     }
   }
 };
