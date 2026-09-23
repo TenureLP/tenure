@@ -304,9 +304,20 @@
       prices are numbers with fifty digits. */
   function everyPrice(tl, tu) { return tu - tl >= 400000; }
 
+  /** A bound at the edge of the tick range is no bound at all. Token launches set one on purpose:
+      liquidity from the launch price down to nothing, sold into as the token is bought. */
+  var OPEN_EDGE = 886000;
+  function openLow(tl) { return tl <= -OPEN_EDGE; }
+  function openHigh(tu) { return tu >= OPEN_EDGE; }
+
   /** "Earns between 2,675.81 and 2,785.01 USDG per ETH." */
   function rangeSentence(pos, s0, s1) {
     if (pos.tickLower == null) return null;
+    var unit = " " + s1 + " per " + s0;
+    var lo = openLow(pos.tickLower), hi = openHigh(pos.tickUpper);
+    if (lo && hi) return "Earns at any price: a full-range position.";
+    if (lo && pos.priceUpper != null) return "Earns at any price up to " + fmtPrice(pos.priceUpper) + unit + ".";
+    if (hi && pos.priceLower != null) return "Earns at any price from " + fmtPrice(pos.priceLower) + unit + " up.";
     if (everyPrice(pos.tickLower, pos.tickUpper)) {
       return "Earns at almost any price: ticks " + pos.tickLower + " to " + pos.tickUpper + ".";
     }
@@ -327,8 +338,8 @@
     var inside = tick >= tl && tick < tu;
     var priced = o.lower != null && o.upper != null && o.now != null;
     var bounded = priced && !everyPrice(tl, tu);
-    var lowerT = bounded ? fmtPrice(o.lower) : "tick " + tl;
-    var upperT = bounded ? fmtPrice(o.upper) : "tick " + tu;
+    var lowerT = openLow(tl) ? "no floor" : bounded || (priced && openHigh(tu)) ? fmtPrice(o.lower) : "tick " + tl;
+    var upperT = openHigh(tu) ? "no ceiling" : bounded || (priced && openLow(tl)) ? fmtPrice(o.upper) : "tick " + tu;
     var nowT = priced ? o.base + " " + fmtPrice(o.now) : "tick " + tick;
 
     var s = el("div", "survey" + (inside ? "" : " out"));
@@ -883,18 +894,30 @@
     } else if (d.valueNote) {
       row(rows, "Value", d.valueNote);
     }
+    // A pair without USDG still has a measurable fee income; it just cannot be put in USDG. That is
+    // a different case from a wrapped counter, which is the only one where nothing can be said.
+    // The service only checks plausibility where it has a USDG figure, so a wrapped counter on
+    // any other pair shows up here as an absurd token amount, and is treated as what it is.
+    var absurd = Number(rate.fees0) >= 1e15 || Number(rate.fees1) >= 1e15;
+    var wrapped = rate.available && (rate.plausible === false || absurd);
+    var unpriced = rate.available && !wrapped && rate.feesUSDG == null && rate.fees0 != null;
     if (readable) {
       row(rows, "Fees per day", fmt(rate.feesPerDayUSDG) + " " + tok(), true);
-      row(rows, "Measured over", duration(rate.windowSeconds) + " of chain history");
-      row(rows, "Source", rate.source + (rate.lowConfidence ? " · low confidence" : ""));
+    } else if (unpriced) {
+      row(rows, "Earned, last " + duration(rate.windowSeconds || 86400),
+          fmtAmount(rate.fees0) + " " + s0 + " + " + fmtAmount(rate.fees1) + " " + s1, true);
     } else if (rate.available) {
       row(rows, "Fees per day", "not readable");
+    }
+    if (readable || unpriced) {
+      row(rows, "Measured over", duration(rate.windowSeconds) + " of chain history");
+      row(rows, "Source", rate.source + (rate.lowConfidence ? " · low confidence" : ""));
     }
     row(rows, "Ticks", pos.tickLower + " → " + pos.tickUpper);
     row(rows, "Liquidity", pos.liquidity);
     sh.body.appendChild(rows);
 
-    if (rate.available && !readable) {
+    if (wrapped) {
       // The counter this is read from is a wrapping accumulator, and a pool that has gone round
       // reports a rate no arithmetic can rescue. Printing it anyway would be the page inventing a
       // number; the honest line is the absence of one.
@@ -934,8 +957,14 @@
       t.body.appendChild(pn);
     } else {
       titleBlock(t.body, "No terms for this one.");
-      var nr = el("p", "note", sentence(quote.reason || "No terms could be derived") +
-        " Offering it anyway would produce a listing the vault rejects.");
+      // The valuation prices in USDG and cannot without a USDG side; the vault itself does not
+      // care, and would take a listing whose terms the seller wrote. Every other reason is one the
+      // vault would refuse too.
+      var noUsdg = /USDG is not one of the pair/i.test(quote.reason || "");
+      var nr = el("p", "note", noUsdg
+        ? "The valuation prices in USDG, and this pair has no USDG side, so it proposes no terms. The " +
+          "vault does not need them: wherever it is deployed, the seller writes the terms and the vault checks them."
+        : sentence(quote.reason || "No terms could be derived") + " Offering it anyway would produce a listing the vault rejects.");
       nr.style.marginTop = "12px";
       t.body.appendChild(nr);
     }
