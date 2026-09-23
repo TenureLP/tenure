@@ -61,14 +61,18 @@ filling that field in cannot help itself. See section 6b of the specification.
 src/LeaseVault.sol          the core contract, no owner
 src/ScreeningList.sol       a published opinion about which pools are fit to deal in, read by nobody
 src/TestUSDG.sol            a settlement token for test networks, mintable by anyone
+src/testnet/                a second test token, and a faucet that hands out live test positions
 src/interfaces/             minimal surfaces of PositionManager, StateView, ERC-20
 src/libraries/Types.sol     v4 types copied over, PositionInfo decoding, actions
 test/LeaseVault.t.sol       unit tests
 test/Invariants.t.sol       stateful fuzz over random action sequences
 test/fork/VaultFork.t.sol   integration tests forked against Robinhood Chain
+test/fork/FaucetFork.t.sol  the faucet and a whole deal, forked against the testnet vault
 test/mocks/                 USDG, a pausable token, a PositionManager and a StateView
 script/Deploy.s.sol         the deployment itself
+script/DeployFaucet.s.sol   the test position faucet, test networks only
 deploy.sh                   one command, with the checks and the guards around it
+deploy-faucet.sh            the same, for the faucet
 docs/SPEC.md                specification, compliance analysis, regulatory context
 ```
 
@@ -124,6 +128,19 @@ exists on the chain you are deploying to, or leave it unset and the deploy creat
 which has six decimals like the token it stands in for and which anyone can mint without limit.
 That last property is the point — a test token that could be scarce is a test token somebody will
 eventually try to sell. On mainnet an unset `USDG` means USDG, never an invented one.
+
+### Test positions
+
+A tester needs a position to lease, and a test network has almost none. `deploy-faucet.sh` deploys
+a second test token, tETH, and `TestPositionFaucet`, which opens a tETH/tUSDG pool at 3,000 tUSDG
+per tETH. Each call to `give()` mints a position six percent either side of the current price to
+the caller, then trades a round trip through the pool so every position in range earns swap fees.
+It has no owner, and its constructor refuses mainnet.
+
+```bash
+PRIVATE_KEY=0x... ./deploy-faucet.sh testnet
+forge test --match-path "test/fork/FaucetFork*" --fork-url https://rpc.testnet.chain.robinhood.com -vv
+```
 
 ## Addresses used on Robinhood Chain (4663)
 

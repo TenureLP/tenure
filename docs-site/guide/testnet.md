@@ -55,17 +55,70 @@ back with its reason (`BuybackAboveSale`, `OutOfRange`, `BadTerm`…) before any
 2. **Open the app on testnet:**
    [app-production-7810.up.railway.app/?chain=46630](https://app-production-7810.up.railway.app/?chain=46630).
    Connect your wallet; if it is on another chain, the app offers to switch.
-3. **Have a position.** Any Uniswap v4 position on testnet that holds liquidity, is in range and has
-   no subscriber can be listed.
+3. **Get a position.** Press **Get a test position**, on the first screen or on **You**. One
+   transaction, and a live Uniswap v4 position lands in your wallet, in range and ready to offer.
 4. **Get tUSDG** from the **You** screen, to fund a deal or to buy one back.
 5. **Run a deal.** List from one account, fund from another (the vault refuses a seller funding
    their own deal), then collect fees, claim rent, buy back or wait out the grace window.
 
-::: tip Break it
-The testnet exists so that anything wrong is found before it matters. If the app lets you do
-something it should not, or refuses something it should allow, that is exactly what we want to hear
-about: open an issue on [GitHub](https://github.com/TenureLP/tenure/issues).
-:::
+### Where the test positions come from
+
+Nobody provides liquidity on a network where nothing is worth anything, so a tester would have no
+position to lease. The **test position faucet** is that liquidity provider. It owns one pool, tETH
+against tUSDG, both test tokens anyone can mint, and every call to `give()`:
+
+- mints both tokens to itself and opens a position six percent either side of the current price,
+  sent straight to the caller;
+- then trades through the pool, a round trip that ends roughly where it started, so every position
+  in range, leased ones included, earns real swap fees. Without it, **Collect the fees** would
+  always collect zero.
+
+It has no owner, holds nothing of value, and its constructor refuses mainnet. The source is in
+[`lease-vault/src/testnet`](https://github.com/TenureLP/tenure/tree/main/lease-vault/src/testnet),
+and a fork test runs a whole deal through it against the deployed vault.
+
+## Quests
+
+Seven things to do with the vault, in the order a deal meets them:
+
+| | Quest | Counted from |
+|---|---|---|
+| 1 | **Offer a position** | `Listed`, as the seller |
+| 2 | **Fund an offer** | `Funded`, as the financier |
+| 3 | **Collect the fees** | `FeesCollected`, as the lessee |
+| 4 | **Claim the rent** | `RentClaimed`, as the financier |
+| 5 | **Buy it back** | `BoughtBack`, on a deal you sold |
+| 6 | **Sell your side** | `FinancierTransferred`, as the one handing it on |
+| 7 | **Take delivery** | `Released`, on a deal you were financing |
+
+Every one is read from an event the vault emits, the moment it is mined. Nothing is self-reported
+and nothing is stored anywhere else: the **Quests** screen of the app reads the vault's events and
+counts, address by address, and anyone can do the same count with `cast logs`.
+
+The whole cycle needs two addresses, because a seller cannot fund their own deal, and two days,
+because that is the shortest term plus the shortest grace window.
+
+### Founding testers
+
+Every address that completes all seven is listed here, as a founding tester, with the date it
+finished. The list is taken from the chain, not from a form.
+
+*No address has completed all seven yet.*
+
+## Found a bug?
+
+The testnet exists so that anything wrong is found before it matters. How to report depends on
+what it is:
+
+| If it is… | For example | Report it |
+|---|---|---|
+| **A way to lose or lock funds**, or to get around one of the vault's bounds | a buyback that pays out twice, a lease that cannot be bought back, a listing the vault should refuse | **Privately**, through [GitHub's private vulnerability reporting](https://github.com/TenureLP/tenure/security/advisories/new). Not in a public issue. |
+| **A deal that settles wrongly** | rent credited to the wrong side, a refund that does not add up | Privately, the same way |
+| **A figure in the app that could mislead a signature** | a buyback price shown differently from what the wallet is asked to sign | A [public issue](https://github.com/TenureLP/tenure/issues) |
+| **Anything else** | a screen that breaks on a phone, wording that is wrong | A [public issue](https://github.com/TenureLP/tenure/issues) |
+
+A good report says which deal or transaction, what you expected, and what happened instead. On the
+testnet everything is public and worth nothing, so a report can show every step.
 
 ## Shorter terms to test with
 

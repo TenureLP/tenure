@@ -55,7 +55,14 @@ window.TENURE = {
 
       /* Deployed with lease-vault/deploy.sh on 2026-09-23 and checked against the chain: it
          points at the PositionManager, StateView and TestUSDG above, and has no owner. */
-      vault: "0x27797a2c3428a92c498ed01f3b1c77f636990f7c"
+      vault: "0x27797a2c3428a92c498ed01f3b1c77f636990f7c",
+      /* The block it was deployed in: the testnet quests read its events from here on. */
+      fromBlock: 123076386,
+
+      /* lease-vault/deploy-faucet.sh prints this. It hands anyone a live position in a pool of
+         two test tokens, which is the one thing a tester cannot otherwise get on this chain.
+         Empty, and the page offers no such button. */
+      faucet: ""
     }
   }
 };

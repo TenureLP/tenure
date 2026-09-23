@@ -12,6 +12,7 @@ interface Vm {
     function expectRevert() external;
     function label(address account, string calldata newLabel) external;
     function envOr(string calldata name, uint256 defaultValue) external view returns (uint256);
+    function chainId(uint256 newChainId) external;
 }
 
 abstract contract MiniTest {

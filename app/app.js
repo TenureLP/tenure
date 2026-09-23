@@ -21,7 +21,7 @@
   // page only followed because a wallet sat on it is not, so the next wallet switch is followed too.
   var pinned = !!params.get("chain");
 
-  var CFG, HAS_VAULT, DEC;
+  var CFG, HAS_VAULT, TESTNET, HAS_FAUCET, DEC;
 
   /* Flattens one chain's entry into the shape the rest of this file reads. Everything below asks
      CFG for an address or an rpc and does not care which chain it came from, which is what keeps
@@ -40,6 +40,7 @@
       if (params.get("vault")) CFG.vault = params.get("vault");
       if (params.get("usdg")) CFG.usdg = params.get("usdg");
       if (params.get("api")) CFG.api = params.get("api");
+      if (params.get("faucet")) CFG.faucet = params.get("faucet");
       CFG.devWallet = params.get("wallet") === "dev";
       // Which development account to act as. Two windows side by side, one the seller and one
       // the financier, is how this flow is actually watched.
@@ -48,6 +49,10 @@
 
     HAS_VAULT = /^0x[0-9a-fA-F]{40}$/.test(CFG.vault || "")
       && /^0x[0-9a-fA-F]{40}$/.test(CFG.usdg || "");
+    // The quests and the faucet are test-network things. Mainnet is refused by id as well as by
+    // configuration, for the reason the tUSDG button is.
+    TESTNET = !!CFG.testToken && CFG.chain.id !== 4663;
+    HAS_FAUCET = TESTNET && /^0x[0-9a-fA-F]{40}$/.test(CFG.faucet || "");
     DEC = CFG.usdgDecimals;
     return true;
   }
@@ -253,9 +258,9 @@
   }
 
   /** What the chain says about a position, numbered in the margin. */
-  function remarks(findings) {
+  function remarks(findings, heading) {
     var r = el("div", "remarks");
-    r.appendChild(el("h4", null, "Remarks"));
+    r.appendChild(el("h4", null, heading || "Remarks"));
     var ol = el("ol");
     findings.forEach(function (f, i) {
       var li = el("li", f.level);
@@ -681,7 +686,8 @@
 
   var busy = false;
 
-  /** One place where every write happens, so every write reports the same way. */
+  /** One place where every write happens, so every write reports the same way. `after` is handed
+      the receipt, for the one write whose result is only in its logs. */
   async function act(button, label, to, data, after) {
     if (busy) return;
     busy = true;
@@ -692,9 +698,9 @@
     try {
       var hash = await Wallet.send(to, data);
       button.textContent = (label.match(/^Step \d of \d · /) || [""])[0] + "waiting for the block…";
-      await Wallet.wait(hash);
+      var receipt = await Wallet.wait(hash);
       say(sentence(label.replace(/^Step \d of \d · /, "").replace(/…$/, "") + " done"), "ok", txLink(hash));
-      if (after) await after();
+      if (after) await after(receipt);
     } catch (err) {
       var text = Eth.explain(err);
       if (text) say(text, "err");
@@ -703,6 +709,30 @@
       button.disabled = false;
       button.textContent = original;
     }
+  }
+
+  /** Asks the test position faucet for a position, then hands its id to `then`. The id is read
+      from the faucet's own event in the receipt rather than guessed from the PositionManager's
+      counter, which anybody else's mint in the same block would move. */
+  function testPositionButton(label, then) {
+    var b = el("button", "ghost", label || "Get a test position");
+    b.type = "button";
+    b.title = "A live Uniswap v4 position in a pool of two test tokens, sent to your wallet. Worth nothing.";
+    b.addEventListener("click", async function () {
+      if (!Wallet.state.account) {
+        try { await Wallet.connect(); } catch (err) { return say(Eth.explain(err) || "", "err"); }
+      }
+      await act(b, "opening a position…", CFG.faucet, window.TENURE_ABI.faucet["give()"], function (receipt) {
+        var log = (receipt.logs || []).filter(function (l) {
+          return same(l.address, CFG.faucet) && l.topics && l.topics[0] === window.TENURE_ABI.faucet.Given;
+        })[0];
+        if (!log) return;
+        var id = BigInt(log.topics[2]).toString();
+        say("Position " + id + " is yours. It is in range and ready to offer.", "ok");
+        if (then) return then(id);
+      });
+    });
+    return b;
   }
 
   /** Approvals are for the exact amount needed. An unlimited approval is convenient once and then
@@ -1263,6 +1293,13 @@
       });
       top.appendChild(mint);
     }
+    if (HAS_FAUCET) {
+      top.appendChild(testPositionButton(null, function (id) {
+        location.hash = "#value";
+        $("tokenId").value = id;
+        return lookup();
+      }));
+    }
     top.appendChild(el("p", "fine", "In your wallet: " + money2(held) + "."));
     out.appendChild(top);
 
@@ -1703,9 +1740,201 @@
     out.appendChild(el("p", "fine", body.disclaimer + " " + s.note));
   }
 
+  // ------------------------------------------------------------------ testnet quests
+
+  /** The seven things a tester can do to the vault, in the order a deal meets them. Each is read
+      from an event the vault emits, so nothing here is self-reported and anyone can recount it. */
+  var QUESTS = [
+    ["listed", "Offer a position", "List a position on the vault, on terms you write."],
+    ["funded", "Fund an offer", "Buy somebody's position and lease it straight back to them."],
+    ["collected", "Collect the fees", "As the lessee, take the fees your leased position earned."],
+    ["claimed", "Claim the rent", "As the financier, take the rent accrued so far."],
+    ["boughtBack", "Buy it back", "Pay the buyback price and take your position home."],
+    ["soldSide", "Sell your side", "Hand your side of a live lease to another address."],
+    ["delivered", "Take delivery", "Let a buy-back window close, and take the position you own."]
+  ];
+
+  function hex(n) { return "0x" + n.toString(16); }
+
+  /** Every quest event the vault has emitted, oldest first. Read in windows the public node
+      accepts, from the block the vault was deployed in. */
+  async function vaultEvents() {
+    var ev = window.TENURE_ABI.ev;
+    var names = ["Listed", "Funded", "FeesCollected", "RentClaimed", "BoughtBack", "FinancierTransferred", "Released"];
+    var latest = Number(BigInt(await Eth.rpc(CFG.chain.rpc, "eth_blockNumber", [])));
+    var start = CFG.fromBlock || 0, step = 500000, out = [];
+    for (var from = start; from <= latest; from += step) {
+      var logs = await Eth.rpc(CFG.chain.rpc, "eth_getLogs", [{
+        address: CFG.vault, fromBlock: hex(from), toBlock: hex(Math.min(latest, from + step - 1)),
+        topics: [names.map(function (n) { return ev[n]; })]
+      }]);
+      out = out.concat(logs || []);
+    }
+    out.sort(function (a, b) {
+      return Number(BigInt(a.blockNumber) - BigInt(b.blockNumber)) || Number(BigInt(a.logIndex) - BigInt(b.logIndex));
+    });
+    return out;
+  }
+
+  /** address -> { quest: true }, from the events in order. A buyback is the lessee's and a
+      delivery the financier's at that moment, so both sides of every deal are followed through
+      funding and every hand-over. */
+  function questProgress(logs) {
+    var byTopic = {};
+    Object.keys(window.TENURE_ABI.ev).forEach(function (n) { byTopic[window.TENURE_ABI.ev[n]] = n; });
+    var done = {}, order = [], seller = {}, financier = {}, counts = { deals: 0, funded: 0 };
+    function mark(a, q) {
+      if (!a) return;
+      a = a.toLowerCase();
+      if (!done[a]) { done[a] = {}; order.push(a); }
+      done[a][q] = true;
+    }
+    function topicAddr(l, i) { return "0x" + l.topics[i].slice(26); }
+    logs.forEach(function (l) {
+      var name = byTopic[l.topics[0]];
+      var id = BigInt(l.topics[1]).toString();
+      if (name === "Listed") { seller[id] = topicAddr(l, 2); counts.deals++; mark(seller[id], "listed"); }
+      else if (name === "Funded") { financier[id] = topicAddr(l, 2); counts.funded++; mark(financier[id], "funded"); }
+      else if (name === "FeesCollected") mark(topicAddr(l, 2), "collected");
+      else if (name === "RentClaimed") mark(topicAddr(l, 2), "claimed");
+      else if (name === "BoughtBack") mark(seller[id], "boughtBack");
+      else if (name === "FinancierTransferred") { mark(topicAddr(l, 2), "soldSide"); financier[id] = topicAddr(l, 3); }
+      else if (name === "Released") mark(financier[id], "delivered");
+    });
+    var rows = order.map(function (a, i) {
+      var n = QUESTS.filter(function (q) { return done[a][q[0]]; }).length;
+      return { address: a, done: done[a], n: n, both: !!(done[a].listed && done[a].funded), first: i };
+    }).sort(function (x, y) { return y.n - x.n || x.first - y.first; });
+    return { rows: rows, counts: counts };
+  }
+
+  async function renderQuests() {
+    var out = $("quests");
+    out.textContent = "";
+    if (!TESTNET || !HAS_VAULT) {
+      var off = emptyPanel("flask", "The quests run on Robinhood testnet, where the vault settles in a test token anyone can mint.");
+      var bar = el("div", "bar");
+      var go = el("button", "primary small", "Switch to the testnet");
+      go.type = "button";
+      go.addEventListener("click", function () { pinned = true; switchTo(46630); location.hash = "#quests"; });
+      bar.appendChild(go);
+      off.appendChild(bar);
+      return out.appendChild(off);
+    }
+    out.appendChild(loading("Reading every deal the vault has seen", 4));
+    var result;
+    try {
+      result = questProgress(await vaultEvents());
+    } catch (err) {
+      out.textContent = "";
+      return out.appendChild(emptyPanel("no-oracle", "The testnet could not be read just now: " + (err.message || err)));
+    }
+    if (current() !== "quests") return;
+    out.textContent = "";
+
+    var rows = result.rows;
+    var tiles = el("div", "tiles four");
+    tile(tiles, "Testers", String(rows.length), null, "addresses with a quest done");
+    tile(tiles, "Deals offered", String(result.counts.deals), null, "on this vault");
+    tile(tiles, "Leases funded", String(result.counts.funded), null, "both sides signed");
+    tile(tiles, "All seven", String(rows.filter(function (r) { return r.n === QUESTS.length; }).length), null,
+         "founding testers", true);
+    out.appendChild(tiles);
+
+    // ---- the reader's own progress
+    var me = Wallet.state.account && Wallet.state.account.toLowerCase();
+    var mine = me && rows.filter(function (r) { return r.address === me; })[0];
+    var sh = sheet([ref("Your quests", me ? short(me) : "no wallet"), CFG.chain.name],
+                   mine ? mine.n + " of " + QUESTS.length : "0 of " + QUESTS.length);
+    if (!me) {
+      titleBlock(sh.body, "Connect to see your progress.", "Progress is read from the vault for the connected address. Nothing is stored anywhere else.");
+      var c = el("div", "acts");
+      var cb = el("button", "primary small", "Connect wallet");
+      cb.addEventListener("click", doConnect);
+      c.appendChild(cb);
+      sh.body.appendChild(c);
+    } else {
+      var n = mine ? mine.n : 0;
+      var stamps = n === QUESTS.length ? [["", "All seven"]] : mine && mine.both ? [["wait", "Both sides"]] : [];
+      titleBlock(sh.body, n === QUESTS.length ? "Every one of them." : n + " of " + QUESTS.length + " done.",
+                 n === QUESTS.length ? "You are on the list of founding testers." : "Each is checked on the chain the moment it happens.", stamps);
+      sh.body.appendChild(remarks(QUESTS.map(function (q) {
+        var did = mine && mine.done[q[0]];
+        return { level: did ? "ok" : "info", title: q[1], detail: did ? "Done, and on the chain." : q[2] };
+      }), "Quests"));
+      var acts = el("div", "acts");
+      if (HAS_FAUCET) {
+        acts.appendChild(testPositionButton(null, function (id) {
+          location.hash = "#value";
+          $("tokenId").value = id;
+          return lookup();
+        }));
+      }
+      acts.appendChild(goTo("Fund an offer", "market", "ghost"));
+      acts.appendChild(goTo("Your deals", "you", "ghost"));
+      sh.body.appendChild(acts);
+    }
+    out.appendChild(sh.node);
+
+    // ---- everyone
+    var board = sheet(["The board", "read from the vault's events"], rows.length + (rows.length === 1 ? " tester" : " testers"));
+    if (!rows.length) {
+      titleBlock(board.body, "Nobody yet.", "The first address to offer a position on this vault goes at the top.");
+    } else {
+      var wrap = el("div", "board-wrap");
+      var table = el("table", "board");
+      var head = el("tr");
+      head.appendChild(el("th", null, "Address"));
+      QUESTS.forEach(function (q, i) {
+        var th = el("th", "q", String(i + 1));
+        th.title = q[1];
+        head.appendChild(th);
+      });
+      head.appendChild(el("th", "n", "Done"));
+      var thead = el("thead");
+      thead.appendChild(head);
+      table.appendChild(thead);
+      var tbody = el("tbody");
+      rows.slice(0, 200).forEach(function (r) {
+        var tr = el("tr", r.address === me ? "me" : null);
+        var td = el("td", "a");
+        td.appendChild(addr(r.address));
+        if (r.n === QUESTS.length) td.appendChild(el("span", "tag", "all seven"));
+        else if (r.both) td.appendChild(el("span", "tag", "both sides"));
+        tr.appendChild(td);
+        QUESTS.forEach(function (q) {
+          var cell = el("td", "q");
+          var dot = el("i", r.done[q[0]] ? "on" : null);
+          dot.title = q[1] + (r.done[q[0]] ? ": done" : ": not yet");
+          cell.appendChild(dot);
+          tr.appendChild(cell);
+        });
+        tr.appendChild(el("td", "n", r.n + " / " + QUESTS.length));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      board.body.appendChild(wrap);
+      var legend = el("p", "fine", QUESTS.map(function (q, i) { return (i + 1) + ". " + q[1]; }).join("  ·  "));
+      board.body.appendChild(legend);
+    }
+    out.appendChild(board.node);
+
+    var fine = el("p", "fine");
+    fine.appendChild(document.createTextNode("Counted from the vault's own events since block " + (CFG.fromBlock || 0) +
+      ". What the quests count toward is set out in the "));
+    var link = el("a", null, "docs");
+    link.href = "https://docs-production-3405.up.railway.app/guide/testnet#quests";
+    link.target = "_blank";
+    link.rel = "noopener";
+    fine.appendChild(link);
+    fine.appendChild(document.createTextNode("."));
+    out.appendChild(fine);
+  }
+
   // ------------------------------------------------------------------ routing
 
-  var VIEWS = ["value", "positions", "market", "you"];
+  var VIEWS = ["value", "positions", "market", "you", "quests"];
 
   function show(name) {
     if (VIEWS.indexOf(name) < 0) name = "value";
@@ -1720,6 +1949,7 @@
     if (name === "market") renderMarket();
     if (name === "you") renderYou();
     if (name === "positions") renderPositions();
+    if (name === "quests") renderQuests();
   }
 
   function current() { return (location.hash || "#value").slice(1); }
@@ -1729,6 +1959,7 @@
     if (v === "market") return renderMarket();
     if (v === "you") return renderYou();
     if (v === "positions") return renderPositions();
+    if (v === "quests") return renderQuests();
   }
 
   // ------------------------------------------------------------------ wiring
@@ -1803,6 +2034,9 @@
   }
 
   function paintChrome() {
+    // The quests tab exists where there are quests to do. A link straight to #quests still
+    // works anywhere, and there it offers the switch.
+    $("tab-quests").classList.toggle("hidden", !(TESTNET && HAS_VAULT));
     var ids = configuredChains();
     var sel = $("chain");
     sel.classList.toggle("hidden", ids.length < 2);
@@ -1876,7 +2110,14 @@
 
     var tryIt = $("try");
     tryIt.textContent = "";
-    if ((CFG.examples || []).length) {
+    // On a test network the useful first step is a position of your own: the examples belong to
+    // somebody else, and only an owner can offer one.
+    if (HAS_FAUCET) {
+      tryIt.appendChild(el("span", null, "No position on " + CFG.chain.name + " yet?"));
+      var get = testPositionButton(null, function (id) { $("tokenId").value = id; return lookup(); });
+      get.classList.add("small");
+      tryIt.appendChild(get);
+    } else if ((CFG.examples || []).length) {
       tryIt.appendChild(el("span", null, "Try one:"));
       CFG.examples.forEach(function (id) {
         var chip = el("button", "chip", id);

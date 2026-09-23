@@ -62,6 +62,7 @@
       <button class="tab" type="button" data-go="positions"><b>02</b><span>Positions</span></button>
       <button class="tab" type="button" data-go="market"><b>03</b><span>Market</span></button>
       <button class="tab" type="button" data-go="you"><b>04</b><span>You</span></button>
+      <button class="tab hidden" type="button" data-go="quests" id="tab-quests"><b>05</b><span>Quests</span></button>
     </nav>
     <div class="tools">
       <select class="chain hidden" id="chain" aria-label="Chain"></select>
@@ -132,6 +133,16 @@
     <p class="lede">Everything you are a party to, on either side, and anything the vault is holding
       for you. Every figure below was fixed when the deal was made, and none of them can move.</p>
     <div id="you"></div>
+  </section>
+
+  <!-- ------------------------------------------------------------ quests, testnet only -->
+  <section data-view="quests" class="hidden">
+    <p class="eyebrow">No. 05 — Testnet quests</p>
+    <h1>Break it, <em>on the record.</em></h1>
+    <p class="lede">Seven things to do with the vault on testnet, from offering a position to taking
+      delivery of one. Each is read from the vault's own events the moment it happens: nothing is
+      self-reported, and anyone can recount it.</p>
+    <div id="quests"></div>
   </section>
 
   <footer>
