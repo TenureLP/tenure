@@ -4,9 +4,18 @@
 
 | Contract | Address |
 |---|---|
-| `LeaseVault` | <span class="pill soon">deploying</span> |
-| `TestUSDG` (tUSDG) | <span class="pill soon">deploying</span> |
+| `LeaseVault` | [`0x27797a2c3428a92c498ed01f3b1c77f636990f7c`](https://explorer.testnet.chain.robinhood.com/address/0x27797a2c3428a92c498ed01f3b1c77f636990f7c) <span class="pill live">live</span> |
+| `TestUSDG` (tUSDG) | [`0x182794fbdc0db20341cd61d4d856b0d5101221a4`](https://explorer.testnet.chain.robinhood.com/address/0x182794fbdc0db20341cd61d4d856b0d5101221a4) |
 | Uniswap v4 PositionManager | `0x58daec3116aae6D93017bAAea7749052E8a04fA7` |
+| Uniswap v4 StateView | `0xF3334192D15450CdD385c8B70e03f9A6bD9E673b` |
+
+Anybody can check the vault is wired to what this page says, with no key:
+
+```bash
+cast call 0x27797a2c3428a92c498ed01f3b1c77f636990f7c "posm()(address)"      --rpc-url https://rpc.testnet.chain.robinhood.com
+cast call 0x27797a2c3428a92c498ed01f3b1c77f636990f7c "stateView()(address)" --rpc-url https://rpc.testnet.chain.robinhood.com
+cast call 0x27797a2c3428a92c498ed01f3b1c77f636990f7c "usdg()(address)"      --rpc-url https://rpc.testnet.chain.robinhood.com
+```
 
 RPC `https://rpc.testnet.chain.robinhood.com` · Explorer
 [explorer.testnet.chain.robinhood.com](https://explorer.testnet.chain.robinhood.com)

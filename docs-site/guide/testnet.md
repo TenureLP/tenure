@@ -4,8 +4,15 @@ Robinhood Chain testnet (chain id **46630**) is where the whole deal can be run 
 nothing at stake: list a position, fund it, collect the fees, buy it back, or let the grace window
 run out and take delivery.
 
-<span class="pill soon">deploying</span> The vault is being deployed to testnet. This page will
-carry its address the moment it is live.
+<span class="pill live">live</span> The vault is deployed on testnet:
+
+| | Address |
+|---|---|
+| `LeaseVault` | [`0x27797a2c3428a92c498ed01f3b1c77f636990f7c`](https://explorer.testnet.chain.robinhood.com/address/0x27797a2c3428a92c498ed01f3b1c77f636990f7c) |
+| `TestUSDG` (tUSDG) | [`0x182794fbdc0db20341cd61d4d856b0d5101221a4`](https://explorer.testnet.chain.robinhood.com/address/0x182794fbdc0db20341cd61d4d856b0d5101221a4) |
+
+It is the same contract that is meant for mainnet, with the same bounds and the same absence of an
+owner. Only the settlement token differs.
 
 ## What is different from mainnet
 
@@ -14,7 +21,7 @@ carry its address the moment it is live.
 | Uniswap v4 contracts | canonical addresses | **the same addresses**, verified before deploying |
 | Settlement token | USDG | **tUSDG**, a test token anyone can mint |
 | Valuation API | yes | no, so you write the terms yourself |
-| `LeaseVault` | not deployed | deploying |
+| `LeaseVault` | not deployed | **live**, `0x2779…0f7c` |
 
 ### tUSDG
 

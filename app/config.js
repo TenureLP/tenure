@@ -41,7 +41,7 @@ window.TENURE = {
 
       /* Same v4 addresses as the mainnet, checked. The settlement token is a TestUSDG anyone can
          mint, created by the deploy; it is worthless by construction and its name says so. */
-      usdg: "",
+      usdg: "0x182794fbdc0db20341cd61d4d856b0d5101221a4",
       usdgSymbol: "tUSDG",
       usdgDecimals: 6,
       posm: "0x58daec3116aae6D93017bAAea7749052E8a04fA7",
@@ -53,7 +53,9 @@ window.TENURE = {
          token is money: the button would only ever revert there, and it would look like a faucet. */
       testToken: true,
 
-      vault: ""
+      /* Deployed with lease-vault/deploy.sh on 2026-09-23 and checked against the chain: it
+         points at the PositionManager, StateView and TestUSDG above, and has no owner. */
+      vault: "0x27797a2c3428a92c498ed01f3b1c77f636990f7c"
     }
   }
 };

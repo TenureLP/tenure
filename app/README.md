@@ -50,9 +50,9 @@ prints the two lines to paste.
 | | 4663, mainnet | 46630, testnet |
 |---|---|---|
 | Uniswap v4 | canonical addresses | **the same addresses**, checked |
-| Settlement token | USDG | none, so the deploy creates a TestUSDG anyone can mint |
+| Settlement token | USDG | tUSDG, created by the deploy, mintable by anyone |
 | Valuation API | yes | **no** |
-| Vault | not deployed | not deployed |
+| Vault | not deployed | `0x27797a2c3428a92c498ed01f3b1c77f636990f7c` |
 
 ### Why the testnet has no valuation
 

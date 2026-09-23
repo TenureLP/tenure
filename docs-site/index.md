@@ -68,7 +68,7 @@ they already own.
 | The [app](https://app-production-7810.up.railway.app) | <span class="pill live">live</span> values any position on Robinhood Chain today |
 | The [valuation API](/api/) | <span class="pill live">live</span> reads mainnet, exact integer maths |
 | On [Olanas](/api/agents) | <span class="pill live">live</span> agents buy a valuation for 0.003 USDG a call |
-| `LeaseVault` on Robinhood Chain testnet | <span class="pill soon">soon</span> see [Testnet](/guide/testnet) |
+| `LeaseVault` on Robinhood Chain testnet | <span class="pill live">live</span> the whole deal, with a test token anyone can mint: see [Testnet](/guide/testnet) |
 | `LeaseVault` on Robinhood Chain mainnet | <span class="pill no">not deployed</span> no audit yet, and none will go live without one |
 
 ::: warning Prototype
